@@ -49,6 +49,7 @@ src/otft_sr/ovsed.py         OVSED completo (R_S por ponto fixo), forma fechada,
 src/otft_sr/niveis.py        níveis N1-N4 (dataclass NivelEquacao) e erro vs OVSED
 src/otft_sr/dados.py         grade por curvas, ruído multiplicativo, partição por curva -> Dataset
 src/otft_sr/contexto.py      PhysicalContext por nível, bibliotecas de prompts, avaliador Ollama
+src/otft_sr/provedores_llm.py ConfiguracaoLLM e provedores (Hugging Face 4/8 bits, Ollama, OpenAI, Anthropic, Google, simulado), registro de uso, ambiente, avaliador M1
 src/otft_sr/experimento.py   configurações de busca (nb01_baseline.yaml + overrides), executar_condicao, controle positivo
 prompts/generico/            prompt do artigo (cópia de physics-llm-sr/prompts)
 prompts/dispositivo/         prompt de física de OTFT (critérios da proposta §5.2)

@@ -15,7 +15,6 @@ from pathlib import Path
 import requests
 
 from physics_llm_sr.core_types import PhysicalContext
-from physics_llm_sr.llm.cache import EvaluationCache
 from physics_llm_sr.llm.prompting import PromptLibrary
 from physics_llm_sr.llm.scoring import LLMEquationEvaluator
 
@@ -96,20 +95,25 @@ def criar_avaliador(
     dir_cache: Path | None = RAIZ_PROJETO / ".cache" / "llm",
     modelo: str = MODELO_OLLAMA,
 ) -> LLMEquationEvaluator:
-    """Avaliador LLM da condição (``backend=None`` cria ``OllamaBackend(modelo)``).
+    """Avaliador LLM da condição (``backend=None`` cria o provedor Ollama de ``modelo``).
 
-    O cache é separado por condição (o hash do prompt já entra na chave; o arquivo separado
-    só facilita auditoria).
+    Atalho do modo M1 para Ollama local; delega a ``otft_sr.provedores_llm`` (fábrica de
+    provedores), mantendo o arquivo de cache ``avaliacoes_<condicao>.jsonl`` e a identidade
+    do cache (``OllamaBackend`` com digest efetivo, ``num_predict=256``). O cache é separado
+    por condição (o hash do prompt já entra na chave; o arquivo separado só facilita
+    auditoria). Para outros provedores use ``provedores_llm.criar_avaliador_m1``.
     """
-    if backend is None:
-        from physics_llm_sr.llm.inference import OllamaBackend
+    from otft_sr.provedores_llm import ConfiguracaoLLM, criar_avaliador_m1
 
-        backend = OllamaBackend(modelo, base_url=URL_OLLAMA, num_predict=256)
-        backend.resolve_identity()
-    cache = None
-    if dir_cache is not None:
-        Path(dir_cache).mkdir(parents=True, exist_ok=True)
-        cache = EvaluationCache(Path(dir_cache) / f"avaliacoes_{condicao}.jsonl")
-    return LLMEquationEvaluator(
-        backend, carregar_biblioteca(condicao), cache=cache, max_retries=1
+    cfg = ConfiguracaoLLM(
+        "ollama", modelo, url_base=URL_OLLAMA, max_novos_tokens=256, timeout_s=300.0
+    )
+    arquivo = None if dir_cache is None else Path(dir_cache) / f"avaliacoes_{condicao}.jsonl"
+    return criar_avaliador_m1(
+        cfg,
+        condicao,
+        provedor=backend,  # type: ignore[arg-type]
+        dir_cache=None,
+        arquivo_cache=arquivo,
+        max_retries=1,
     )
