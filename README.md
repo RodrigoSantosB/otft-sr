@@ -42,6 +42,38 @@ guarda saídas: é sempre regenerado pelo builder; resultados executados vão pa
 As colunas exportadas são `algoritmo` e `configuracao_busca` (CSV anteriores à renomeação
 usam outros nomes e não são lidos pelo notebook atual).
 
+## Modo M2 (exploratório): LLM como gerador de equações
+
+`otft_sr.gerador.executar_geracao(nivel, "G0"|"G1"|"G2", provedor, semente, n_candidatos,
+n_iteracoes_refinamento)` devolve `(linha, candidatos)`; a linha segue `COLUNAS_M1` (as mesmas
+colunas de `executar_condicao`) seguidas de `COLUNAS_M2`. G0 = variáveis, unidades e resumo
+numérico do treino; G1 = G0 + contexto físico de OTFT (sem a equação-alvo nem constantes);
+G2 = G1 + `k` rodadas de refinamento por linhagem com retorno de treino/validação e das
+checagens físicas (`n_candidatos x (1 + k)` candidatos avaliados).
+
+Decisões (pré-definidas, antes de qualquer execução real):
+
+- Interpretação: primeiro objeto JSON da resposta, schema pydantic (`equation`, `variables`,
+  `parameters` obrigatórios), `parse_infix` (whitelist de AST, sem eval/exec/sympify),
+  operações = as do PySR no M1, no máximo 30 nós, profundidade 8 e 6 parâmetros; até
+  `max_retentativas` novas tentativas com o motivo da recusa.
+- Ajuste: `least_squares` (TRF, `x_scale="jac"`) no TREINO com resíduo em log10|I_D|
+  (proposta §4.4); 8 inícios determinísticos (chutes do LLM, todos 1, sorteios log-uniformes
+  semeados por semente e hash da equação).
+- Checagens (treino + grade da região): I_D finito e > 0, monotonia em V_GS, limiar
+  (N1/N3: I_D ~ 0 no V_Th extrapolado de sqrt(I_D); N2: I_D = 0 em V_DS = 0; N4: I_D -> I_leak
+  estimado no menor V_GS), saturação (N1/N3/N4: I_D independente de V_DS; N2: dI/dV_DS -> 0
+  na constrição) e dimensional só qualitativa (informativa).
+- Seleção só por VALIDAÇÃO: fisicamente válido primeiro, menor RMSE de log10 I_D (empate a
+  1e-6 década), menos nós. Métricas de teste só do selecionado, por `metricas_expressao`.
+
+Persistência e estatística comuns a M1/M2: `otft_sr.persistencia.RegistroExperimento` grava
+`results/<id>/` (config, ambiente com commit git, métricas, resumo, candidatos, equações,
+metadados de geração com hashes, log JSONL, figuras), pula ensaios já registrados e nunca grava
+segredos; `carregar_resultados` lê também os CSV/JSON antigos do notebook 01
+(`data/legado/colunas_notebook01.json`). `otft_sr.estatistica` agrega (IC 95 % t), calcula
+recuperação com IC de Wilson, comparação pareada por semente (Wilcoxon) e McNemar exato.
+
 ## Estrutura
 
 ```
@@ -51,9 +83,14 @@ src/otft_sr/dados.py         grade por curvas, ruído multiplicativo, partição
 src/otft_sr/contexto.py      PhysicalContext por nível, bibliotecas de prompts, avaliador Ollama
 src/otft_sr/provedores_llm.py ConfiguracaoLLM e provedores (Hugging Face 4/8 bits, Ollama, OpenAI, Anthropic, Google, simulado), registro de uso, ambiente, avaliador M1
 src/otft_sr/experimento.py   configurações de busca (nb01_baseline.yaml + overrides), executar_condicao, controle positivo
+src/otft_sr/gerador.py       modo M2: LLM gerador (G0, G1, G2), interpretação segura, ajuste, checagens, seleção
+src/otft_sr/persistencia.py  results/<id>/ comum a M1/M2, retomada, saneamento de segredos, leitura legada
+src/otft_sr/estatistica.py   agregação com IC t, Wilson, pareada por semente, McNemar exato, custo-qualidade
 prompts/generico/            prompt do artigo (cópia de physics-llm-sr/prompts)
 prompts/dispositivo/         prompt de física de OTFT (critérios da proposta §5.2)
+prompts/gerador/             templates modulares do modo M2 (hash registrado)
 data/org1/                   curvas medidas e parâmetros da Org1 (cópia de Model_OTFT)
+data/legado/                 mapeamento de colunas antigas do notebook 01 (só leitura)
 references/premissas_cientificas.md   premissas H-OTFT-01...
 notebooks/build_01_rs_otft.py        gerador do notebook 01_rs_otft.ipynb
 tests/                       pytest (inclui varredura de terminologia)
