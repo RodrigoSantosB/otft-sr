@@ -327,14 +327,20 @@ print("exportado:", base.with_suffix(".csv").name, base.with_suffix(".json").nam
 """)
 
 
-def main() -> None:
+def construir() -> nbf.NotebookNode:
+    """Monta o notebook a partir das células declaradas acima."""
     nb = nbf.v4.new_notebook()
     nb.metadata["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}
     nb.cells = [
         nbf.v4.new_markdown_cell(t) if k == "md" else nbf.v4.new_code_cell(t) for k, t in celulas
     ]
-    nbf.write(nb, SAIDA)
-    print(f"escrito: {SAIDA} ({len(nb.cells)} células)")
+    return nb
+
+
+def main(saida: Path = SAIDA) -> None:
+    nb = construir()
+    nbf.write(nb, saida)
+    print(f"escrito: {saida} ({len(nb.cells)} células)")
 
 
 if __name__ == "__main__":
