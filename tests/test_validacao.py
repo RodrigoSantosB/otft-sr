@@ -31,7 +31,7 @@ def test_rmse_log10_predicao_nao_positiva_usa_piso_e_conta_fracao():
 
 
 CHAVES = {
-    "nivel", "algoritmo", "condicao", "ruido", "semente", "configuracao_busca", "expressao",
+    "nivel", "nivel_proposta", "algoritmo", "condicao", "ruido", "semente", "configuracao_busca", "expressao",
     "one_minus_r2", "rmse_log10", "tree_distance_algebraic", "forma_funcional_sympy",
     "classe", "chamadas_llm", "status",
 }
@@ -42,6 +42,7 @@ def test_executar_condicao_deap_verificacao_devolve_linha_completa():
     assert CHAVES <= set(linha)
     assert linha["status"] == "ok"
     assert linha["nivel"] == N1.id
+    assert linha["nivel_proposta"] == 1
     assert linha["algoritmo"] == "deap"
     assert linha["configuracao_busca"] == "verificacao"
     assert linha["chamadas_llm"] == 0  # condição A nunca chama o LLM

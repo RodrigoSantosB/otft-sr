@@ -122,6 +122,11 @@ def _subconjunto(
     )
 
 
+#: Chave estável por nível na semente dos dados: preserva os conjuntos gerados antes de N2 e
+#: N3 trocarem de posição (alinhamento com a proposta); o N3 atual usava o dígito 2 e o N2, 3.
+_CHAVE_SEMENTE = {"N1": 1, "N2": 3, "N3": 2, "N4": 4}
+
+
 def construir_datasets(
     nivel: NivelEquacao,
     sigma: float = 0.0,
@@ -132,7 +137,7 @@ def construir_datasets(
 ) -> dict[str, Dataset]:
     """Datasets ``treino``/``validacao``/``teste`` do nível (ruído em todas as partições;
     ``y_true`` limpo é mantido para as métricas de teste)."""
-    rng = np.random.default_rng(np.random.SeedSequence([semente, int(nivel.id[1:]), 7]))
+    rng = np.random.default_rng(np.random.SeedSequence([semente, _CHAVE_SEMENTE[nivel.id], 7]))
     grade = gerar_grade(nivel, n_curvas, n_pontos, rng)
     y_true = nivel.gerador(grade.V_GS, grade.V_DS)
     y_obs = aplicar_ruido(y_true, sigma, rng)

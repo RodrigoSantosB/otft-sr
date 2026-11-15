@@ -22,7 +22,7 @@ from otft_sr.experimento import (
     controle_positivo,
     executar_condicao,
 )
-from otft_sr.niveis import FEATURES, erro_vs_ovsed, escada
+from otft_sr.niveis import FEATURES, erro_vs_ovsed, escada, nivel
 from otft_sr.ovsed import (
     carregar_parametros_org1,
     corrente_forma_fechada_uA,
@@ -74,6 +74,7 @@ def test_nivel_proximo_do_ovsed_na_regiao(nivel):
 @pytest.mark.parametrize("nivel", NIVEIS, ids=lambda n: n.id)
 def test_controle_positivo_pelo_pipeline(nivel):
     r = controle_positivo(nivel)
+    assert (r["nivel"], r["nivel_proposta"]) == (nivel.id, nivel.nivel_proposta)
     assert r["one_minus_r2"] < 1e-12
     assert r["e_normalizado"] < 1e-12
     assert r["tree_distance"] == 0.0
@@ -85,7 +86,7 @@ def test_equivalencia_sympy_reconhece_formas_reescritas():
     from otft_sr.equivalencia import mesma_forma_funcional
 
     P = lambda s: parse_infix(s, FEATURES)  # noqa: E731
-    n1, n2, _, n4 = NIVEIS
+    n1, n2, n4 = (nivel(i) for i in ("N1", "N3", "N4"))
     assert mesma_forma_funcional(P("log(1.00064 ** (4.15 ** V_GS))"), P(n4.expressao))
     assert mesma_forma_funcional(P("exp(1.42 * V_GS - 7.35)"), P(n4.expressao))
     assert mesma_forma_funcional(P("0.0083 * V_GS ** 2 - 0.33 * V_GS + 3.4"), P(n1.expressao))
@@ -128,7 +129,7 @@ def test_ruido_multiplicativo_proporcional():
 
 
 def test_objetivo_com_fake_evaluator_chama_c_e_condicao_A_nao():
-    nivel = NIVEIS[1]
+    nivel = NIVEIS[2]  # N3, lei de potência
     ds = construir_datasets(nivel, 0.0, 0)["treino"]
     ctx = contexto_fisico(nivel)
     fake = FakeEquationEvaluator.from_function(

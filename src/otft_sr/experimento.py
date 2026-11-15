@@ -225,6 +225,7 @@ def executar_condicao(
     )
     linha: dict[str, Any] = {
         "nivel": nivel.id,
+        "nivel_proposta": nivel.nivel_proposta,
         "algoritmo": algoritmo,
         "condicao": condicao,
         "ruido": ruido,
@@ -285,4 +286,10 @@ def controle_positivo(nivel: NivelEquacao, semente: int = 0, algoritmo: str = "p
     expr = parse_infix(nivel.expressao, FEATURES)
     e, s = objetivo.components(expr, ds["teste"].X, ds["teste"].y_true)
     m = metricas_expressao(expr, nivel, ds["teste"].X, ds["teste"].y_true, cfg)
-    return {"nivel": nivel.id, "e_normalizado": e, "s_normalizado": s, **m}
+    return {
+        "nivel": nivel.id,
+        "nivel_proposta": nivel.nivel_proposta,
+        "e_normalizado": e,
+        "s_normalizado": s,
+        **m,
+    }

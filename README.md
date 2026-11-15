@@ -2,17 +2,17 @@
 
 Adapta Taskin, Xie & Lazebnik (Sci Rep 2026), perda L = w1·e + w2·s + w3·c, a equações de
 corrente de dreno de OTFTs (proposta `proposta_de_artigo___DL__Stefan_.pdf`). Equações-alvo:
-escada N1–N4 ancorada no modelo OVSED com parâmetros da Org1 (TCC, `Model_OTFT`).
+níveis N1–N4 da proposta (Seção 5.1) ancorados no modelo OVSED com parâmetros da Org1 (TCC, `Model_OTFT`).
 Condições experimentais: A = RS sem LLM, B = LLM com prompt genérico, C = LLM com prompt de
 física de dispositivo.
 
-| Nível | Equação | Região |
-|---|---|---|
-| N1 | I_D = K (V_GS − V_Th)² | saturação (controle canônico) |
-| N2 | I_D = K (V_GS − V_th0)^l | acumulação forte, F_sat constante |
-| N3 | I_D = K (2 (V_GS − V_Th) V_DS − V_DS²) | triodo (V_DS ≤ V_GS − V_Th) |
-| N4 | I_D = I_0 exp(ln10 V_GS / S) | sublimiar, I_leak removido (pA) |
-| N5 | implícita com R_S | só documentado (H-OTFT-08) |
+| Id (= nível da proposta) | Nome científico | Equação | Região | Id antes do alinhamento |
+|---|---|---|---|---|
+| N1 | Saturação quadrática ideal | I_D = K (V_GS − V_Th)² | saturação (controle canônico) | N1 |
+| N2 | Regime linear (triodo) com termo quadrático em V_DS | I_D = K (2 (V_GS − V_Th) V_DS − V_DS²) | triodo (V_DS ≤ V_GS − V_Th) | N3 |
+| N3 | Saturação com mobilidade em lei de potência | I_D = K (V_GS − V_th0)^l | acumulação forte, F_sat constante | N2 |
+| N4 | Corrente sublimiar exponencial | I_D = I_0 exp(ln10 V_GS / S) | sublimiar, I_leak removido (pA) | N4 |
+| N5 | Saturação com resistência de contato | implícita com R_S | só documentado (H-OTFT-08) | N5 |
 
 ## Ambiente
 
@@ -46,7 +46,7 @@ usam outros nomes e não são lidos pelo notebook atual).
 
 ```
 src/otft_sr/ovsed.py         OVSED completo (R_S por ponto fixo), forma fechada, dados medidos Org1
-src/otft_sr/niveis.py        escada N1-N4 (dataclass NivelEquacao) e erro vs OVSED
+src/otft_sr/niveis.py        níveis N1-N4 (dataclass NivelEquacao) e erro vs OVSED
 src/otft_sr/dados.py         grade por curvas, ruído multiplicativo, partição por curva -> Dataset
 src/otft_sr/contexto.py      PhysicalContext por nível, bibliotecas de prompts, avaliador Ollama
 src/otft_sr/experimento.py   configurações de busca (nb01_baseline.yaml + overrides), executar_condicao, controle positivo
