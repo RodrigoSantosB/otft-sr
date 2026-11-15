@@ -1,0 +1,21 @@
+{
+  "descricao": "Nomes de colunas, chaves de metadados e valores dos CSV/JSON exportados pelo notebook 01 antes da renomeacao terminologica (commit 755d520). Usado so na leitura de resultados antigos (otft_sr.persistencia.carregar_resultados); nenhum codigo novo grava esses nomes.",
+  "colunas": {
+    "motor": "algoritmo",
+    "orcamento": "configuracao_busca"
+  },
+  "valores": {
+    "configuracao_busca": {
+      "fumaca": "verificacao",
+      "completo": "calibrada",
+      "personalizado": "definida_pelo_usuario",
+      "definida pelo usuário": "definida_pelo_usuario"
+    }
+  },
+  "metadados": {
+    "orcamento": "configuracao_busca",
+    "fumaca": "execucao_de_verificacao",
+    "motores": "algoritmos_rs",
+    "motores_llm": "algoritmos_rs_llm"
+  }
+}

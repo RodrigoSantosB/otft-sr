@@ -1,0 +1,6 @@
+Required answer format: ONE JSON object and nothing else, with these keys:
+{"equation": "<right-hand side using the input variables and the parameters>",
+ "variables": ["<input variables used>"],
+ "parameters": {"<parameter name>": <initial guess as a number, or null>},
+ "assumptions": ["<short statement>"],
+ "physical_constraints": ["<short statement>"]}

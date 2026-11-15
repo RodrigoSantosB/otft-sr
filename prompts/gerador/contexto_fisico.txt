@@ -1,0 +1,9 @@
+Physical context (organic thin-film transistor, OTFT):
+- Device: p-type organic thin-film transistor; magnitudes are used, so V_GS, V_DS and I_D are all non-negative. V_GS is the gate-source voltage, V_DS the drain-source voltage and I_D the drain current.
+- Geometry and materials: the drain current scales with the channel width-to-length ratio W/L, the gate dielectric capacitance per unit area C_i and the carrier mobility mu; these constants are not given and must be absorbed by free parameters.
+- Threshold voltage V_Th: below it (V_GS < V_Th) only a small subthreshold current flows, which rises exponentially with V_GS (characterized by a subthreshold swing S, in V per decade) until it is masked by a constant leakage floor I_leak; above it a conducting channel of accumulated charge forms, and the charge grows with the gate overdrive V_GS - V_Th.
+- Regimes above threshold: linear (triode) regime for V_DS < V_GS - V_Th, where I_D grows with V_DS and vanishes at V_DS = 0; saturation for V_DS >= V_GS - V_Th (channel pinch-off), where I_D becomes nearly independent of V_DS.
+- Mobility: in disordered organic semiconductors transport is by hopping between localized states, so the effective mobility is not constant and usually increases with the gate overdrive V_GS - V_Th.
+- Expected qualitative behaviour: I_D is finite and positive, non-decreasing in V_GS, tends to zero (or to the leakage floor) as V_GS decreases towards V_Th, and saturates in V_DS beyond pinch-off.
+- Units: V_GS and V_DS in volts; I_D in ${unidade_I_D}. Arguments of exp and log should be dimensionless (scale voltages by a parameter).
+Measurement conditions of this data set: ${descricao_experimento}

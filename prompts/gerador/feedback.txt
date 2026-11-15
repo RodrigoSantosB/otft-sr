@@ -1,0 +1,7 @@
+Feedback on your previous proposal (computed by tools on training and validation data only):
+- equation: ${equacao}
+- status: ${status}
+- fitted parameters: ${parametros}
+- RMSE of log10(I_D): training ${rmse_treino} decades, validation ${rmse_validacao} decades; validation 1 - R^2: ${r2_validacao}
+- physical checks: ${checagens}
+Propose a refined equation that fixes the failed checks and reduces the validation error, keeping it as simple as possible.

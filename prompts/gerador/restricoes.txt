@@ -1,0 +1,5 @@
+Constraints on the equation:
+- Write only the right-hand side of I_D = f(V_GS, V_DS), using the input variables ${variaveis} and named free parameters.
+- Allowed operations: + - * / ** and the functions ${funcoes}. Nothing else: no other functions, no code, no imports, no comparisons, no conditionals.
+- Free parameters: at most ${max_parametros}; names must match [A-Za-z][A-Za-z0-9_]* and differ from the variable names (examples of valid names: K, V_T, a, b1). Numeric literals are allowed.
+- Complexity: at most ${max_nos} nodes in the expression tree (each operator, function, variable, parameter or number counts as one node) and nesting depth at most ${max_profundidade}.

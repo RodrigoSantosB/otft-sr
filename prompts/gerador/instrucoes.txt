@@ -1,0 +1,1 @@
+Propose candidate ${indice} of ${total}. ${anteriores}Prefer the simplest equation that is consistent with the data${complemento_fisico}.

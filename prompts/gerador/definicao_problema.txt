@@ -1,0 +1,1 @@
+Task: symbolic regression. Propose an explicit closed-form equation I_D = f(V_GS, V_DS) that describes the training data summarized below. The equation may contain named free parameters; their values are fitted afterwards to the training data by least squares on log10(I_D), so you do not need to know them.

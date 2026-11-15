@@ -156,6 +156,26 @@ def test_condicao_com_llm_exige_avaliador():
         executar_condicao(NIVEIS[0], "deap", "C")
 
 
+def test_linha_m1_segue_colunas_declaradas(monkeypatch):
+    """``COLUNAS_M1`` (esquema comum a M1 e M2) é exatamente o que ``executar_condicao`` grava."""
+    from types import SimpleNamespace
+
+    from otft_sr import experimento
+
+    n1 = NIVEIS[0]
+
+    class _Ajuste:
+        def fit(self, *a, **k):
+            return SimpleNamespace(
+                best_expression=parse_infix(n1.expressao, FEATURES), stop_reason="fixo",
+                n_generations=0)
+
+    monkeypatch.setattr(experimento, "make_regressor", lambda _alg: _Ajuste())
+    linha = executar_condicao(n1, "deap", "A")
+    assert linha["status"] == "ok" and linha["classe"] == "recupera estrutura"
+    assert tuple(linha) == tuple(c for c in experimento.COLUNAS_M1 if c not in ("erro", "traceback"))
+
+
 @pytest.mark.parametrize("algoritmo", ALGORITMOS_RS)
 def test_config_valida_por_algoritmo(algoritmo):
     for configuracao_busca in ("verificacao", "calibrada"):
