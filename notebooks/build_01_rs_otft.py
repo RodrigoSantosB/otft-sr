@@ -37,7 +37,7 @@ níveis da proposta (Seção 5.1), ancorados no modelo OVSED com parâmetros da 
 | B | prompt genérico (física clássica, artigo) | 0,1 |
 | C | prompt de física de dispositivo (OTFT) | 0,1 |
 
-Premissas: `references/premissas_cientificas.md` (H-OTFT-01…16).
+Premissas: `references/premissas_cientificas.md` (H-OTFT-01…18).
 
 ## 0. Ambiente e parâmetros
 """)
@@ -74,7 +74,8 @@ from otft_sr import ovsed
 from otft_sr.contexto import contexto_fisico, criar_avaliador, ollama_disponivel
 from otft_sr.dados import construir_datasets
 from otft_sr.experimento import CRITERIO, PESOS_LINHA_DE_BASE, PESOS_LLM, controle_positivo, executar_condicao
-from otft_sr.niveis import N5_DOCUMENTACAO, erro_vs_ovsed, escada, nivel
+from otft_sr.niveis import (N5_DOCUMENTACAO, discriminabilidade_quadratica, erro_vs_medida_org1,
+                            erro_vs_ovsed, escada, nivel)
 
 # Rótulo científico "N<k> — nome" de cada nível (índice = nível da proposta, Seção 5.1).
 ROTULO = {n.id: f"{n.id} — {n.nome[0].lower()}{n.nome[1:]}" for n in escada()}
@@ -96,13 +97,19 @@ md(r"""
 |---|---|---|
 | N1 | saturação quadrática ideal | $I_D = K (V_{GS} - V_{Th})^2$ |
 | N2 | regime linear (triodo) com termo quadrático em $V_{DS}$ | $I_D = K (2 (V_{GS} - V_{Th}) V_{DS} - V_{DS}^2)$ |
-| N3 | saturação com mobilidade em lei de potência | $I_D = K (V_{GS} - V_{th0})^{l}$ |
-| N4 | corrente sublimiar exponencial | $I_D = I_0 \exp(\ln 10\, V_{GS}/S)$ |
+| N3 | saturação com mobilidade em lei de potência (perto do limiar) | $I_D = K (V_{GS} - V_{th0})^{l}$ |
+| N4 | corrente sublimiar exponencial com fuga aditiva | $I_D = I_{leak} + I_0 \exp(\ln 10\, V_{GS}/S)$ |
 | N5 | saturação com resistência de contato | implícita em $I_D$; só documentado (H-OTFT-08) |
 
 OVSED (canal p em módulo): $\theta = (V_{GS} - V_{th0} - \delta V_{DS})/(n V_T)$,
 $q_{tot} = \mathrm{softplus}(\theta)$, $I_D = I_{leak} + W J_{th} q_{tot}^{l} F_{sat}$, com
 $R_S$ por ponto fixo. $V_{th0} = 8{,}57$ V (H-OTFT-02).
+
+Regiões de N3 e N4 (H-OTFT-17, H-OTFT-18): o N3 desce até perto do limiar
+($V_{GS}$ de 10,5 a 28 V), onde a lei de potência se separa da lei quadrática; o critério é a
+discriminabilidade, isto é, o erro do melhor ajuste $K (V_{GS} - V_T)^2$ aos dados do N3. O N4
+inclui a fuga $I_{leak}$ como termo aditivo e cobre o sublimiar observável na Org1 medida
+($V_{GS}$ de 0 a 10 V, $V_{DS}$ de 1 a 5 V); seu $S$ é um swing efetivo da transição (H-OTFT-12).
 """)
 
 code(r"""
@@ -114,13 +121,21 @@ print(f"RMSE log10|I_D| OVSED vs Org1 medida: V_th0 = 8,57 V -> {ovsed.erro_log_
 
 linhas = []
 for n in escada():
-    e = erro_vs_ovsed(n)
+    e, m = erro_vs_ovsed(n), erro_vs_medida_org1(n, curvas)
     linhas.append({"nível": ROTULO[n.id], "nome": n.nome, "expressão de referência": n.expressao,
                    "I_D": n.unidades["I_D"], "região": n.regiao.descricao,
                    "erro rel. médio vs OVSED": round(e["erro_rel_medio"], 3),
-                   "RMSE log10 vs OVSED (déc)": round(e["rmse_log10"], 3)})
+                   "RMSE log10 vs OVSED (déc)": round(e["rmse_log10"], 3),
+                   "RMSE log10 vs Org1 medida (déc)": round(m["rmse_log10"], 3),
+                   "pontos medidos na região": m["n_pontos"]})
 tabela_niveis = pd.DataFrame(linhas).set_index("nível")
 display(tabela_niveis)
+
+# Discriminabilidade do N3 (H-OTFT-18): melhor K (V_GS - V_T)^2 ajustado aos dados do N3.
+disc = discriminabilidade_quadratica(nivel("N3"))
+print(f"N3 vs melhor ajuste quadrático: RMSE log10 = {disc['rmse_log10_quadratica']:.3f} déc "
+      f"(V_T = {disc['V_T_quadratica_log']:.2f} V); 1 - R² = {disc['one_minus_r2_quadratica']:.2e} "
+      f"(V_T = {disc['V_T_quadratica']:.2f} V). Para o próprio N3 ambos são 0.")
 for n in escada():
     print(f"{ROTULO[n.id]}: {n.derivacao}")
 print(N5_DOCUMENTACAO)
@@ -129,35 +144,87 @@ print(N5_DOCUMENTACAO)
 code(r"""
 med = {c.nome: c for c in curvas}
 sat_quad, triodo, sat_potencia, sublimiar = escada()
-fig, ax = plt.subplots(1, 3, figsize=(15, 4.2))
+fig, ax = plt.subplots(2, 3, figsize=(16, 8.4))
+c50, c2 = med["org1_50VDS"], med["org1_2VDS"]
+cor_n = {"N1": "C0", "N2": "C2", "N3": "C1", "N4": "C3", "quad": "C4"}
+r3 = sat_potencia.regiao.V_GS
 
-c50 = med["org1_50VDS"]; vg = np.linspace(0.3, 50, 300)
-ax[0].semilogy(c50.V_GS, c50.I_D_uA, "k.", label="Org1 medida (V_DS = 50 V)")
-ax[0].semilogy(vg, ovsed.corrente_ovsed_uA(vg, 50, p), "k-", lw=1, label="OVSED completo")
-for n, cor in ((sat_quad, "C0"), (sat_potencia, "C1")):
+# (a) saturação: N1 e N3 nas respectivas regiões
+a = ax[0, 0]; vg = np.linspace(0.3, 50, 300)
+a.semilogy(c50.V_GS, c50.I_D_uA, "k.", label="Org1 medida (V_DS = 50 V)")
+a.semilogy(vg, ovsed.corrente_ovsed_uA(vg, 50, p), "k-", lw=1, label="OVSED completo")
+for n in (sat_quad, sat_potencia):
     v = np.linspace(*n.regiao.V_GS, 100)
-    ax[0].semilogy(v, n.gerador(v, np.full_like(v, 50.0)), cor, lw=2, label=ROTULO[n.id])
-c2 = med["org1_2VDS"]
-ax[0].set(xlabel="V_GS (V)", ylabel="I_D (µA)", title="Saturação: N1 e N3")
-ax[0].set_ylim(1e-5, 30); ax[0].legend(fontsize=8)
+    a.semilogy(v, n.gerador(v, np.full_like(v, 50.0)), cor_n[n.id], lw=2, label=ROTULO[n.id])
+a.axvspan(*r3, color=cor_n["N3"], alpha=0.08)
+a.set(xlabel="V_GS (V)", ylabel="I_D (µA)", title="(a) Saturação: N1 (25–50 V) e N3 (10,5–28 V)", ylim=(1e-5, 30))
+a.legend(fontsize=7)
 
+# (b) região do N3: lei de potência contra a forma quadrática de N1
+a = ax[0, 1]; v = np.linspace(*r3, 200); vd50 = np.full_like(v, 50.0)
+y3 = sat_potencia.gerador(v, vd50)
+quad = disc["K_quadratica_log"] * (v - disc["V_T_quadratica_log"]) ** 2
+m50 = (c50.V_GS >= r3[0]) & (c50.V_GS <= r3[1])
+a.semilogy(c50.V_GS[m50], c50.I_D_uA[m50], "k.", label="Org1 medida (V_DS = 50 V)")
+a.semilogy(v, ovsed.corrente_ovsed_uA(v, 50, p), "k-", lw=1, label="OVSED completo")
+a.semilogy(v, y3, cor_n["N3"], lw=2, label=ROTULO["N3"])
+a.semilogy(v, quad, "--", color=cor_n["quad"], lw=2,
+           label=f"melhor K (V_GS − V_T)² ajustado ao N3 (V_T = {disc['V_T_quadratica_log']:.1f} V)")
+vn1 = v[v > sat_quad.constantes["V_Th"]]
+a.semilogy(vn1, sat_quad.gerador(vn1, np.full_like(vn1, 50.0)), ":", color=cor_n["N1"], lw=2,
+           label="N1 extrapolado (V_GS > V_Th)")
+a.set(xlabel="V_GS (V)", ylabel="I_D (µA)", title="(b) Região do N3: lei de potência × quadrática")
+a.legend(fontsize=7)
+
+# (c) desvio em relação ao N3, em década
+a = ax[0, 2]
+a.axhline(0, color=cor_n["N3"], lw=2, label="N3 (referência)")
+a.plot(v, np.log10(quad / y3), "--", color=cor_n["quad"], lw=2,
+       label=f"melhor quadrática (RMSE {disc['rmse_log10_quadratica']:.3f} déc)")
+a.plot(v, np.log10(ovsed.corrente_ovsed_uA(v, 50, p) / y3), "k-", lw=1, label="OVSED completo (V_DS = 50 V)")
+a.plot(c50.V_GS[m50], np.log10(c50.I_D_uA[m50] / sat_potencia.gerador(c50.V_GS[m50], c50.V_DS[m50])), "k.",
+       label="Org1 medida")
+a.set(xlabel="V_GS (V)", ylabel="log10(I_D / I_D,N3) (déc)", title="(c) Desvio em relação ao N3")
+a.legend(fontsize=7)
+
+# (d) N2, triodo
+a = ax[1, 0]
 for vgs, cor in ((30, "C2"), (40, "C3"), (50, "C4")):
     c = med[f"org1_{vgs}VGS"]; vd = np.linspace(0, 50, 200)
-    ax[1].plot(c.V_DS, c.I_D_uA, ".", color=cor, ms=4, label=f"Org1 medida V_GS = {vgs} V")
-    ax[1].plot(vd, ovsed.corrente_ovsed_uA(vgs, vd, p), "-", color=cor, lw=1)
+    a.plot(c.V_DS, c.I_D_uA, ".", color=cor, ms=4, label=f"Org1 medida V_GS = {vgs} V")
+    a.plot(vd, ovsed.corrente_ovsed_uA(vgs, vd, p), "-", color=cor, lw=1)
     vdt = np.linspace(0, vgs - triodo.constantes["V_Th"], 50)
-    ax[1].plot(vdt, triodo.gerador(np.full_like(vdt, vgs), vdt), "--", color=cor, lw=2)
-ax[1].set(xlabel="V_DS (V)", ylabel="I_D (µA)", title="Saída: OVSED (—) e N2, triodo (--)")
-ax[1].legend(fontsize=7)
+    a.plot(vdt, triodo.gerador(np.full_like(vdt, vgs), vdt), "--", color=cor, lw=2)
+a.set(xlabel="V_DS (V)", ylabel="I_D (µA)", title="(d) Saída: OVSED (—) e N2, triodo (--)")
+a.legend(fontsize=7)
 
-vg = np.linspace(0, 20, 200)
-ax[2].semilogy(c2.V_GS, c2.I_D_uA * 1e6, "k.", label="Org1 medida (V_DS = 2 V)")
-ax[2].semilogy(vg, ovsed.corrente_ovsed_uA(vg, 2, p) * 1e6, "k-", lw=1, label="OVSED completo")
-ax[2].semilogy(vg, ovsed.corrente_ovsed_uA(vg, 2, p, com_leak=False) * 1e6, "k:", label="OVSED sem I_leak")
-v = np.linspace(*sublimiar.regiao.V_GS, 50)
-ax[2].semilogy(v, sublimiar.gerador(v, np.full_like(v, 2.0)), "C5", lw=2, label=ROTULO[sublimiar.id])
-ax[2].set(xlabel="V_GS (V)", ylabel="I_D (pA)", title="N4, sublimiar (I_leak removido)")
-ax[2].legend(fontsize=8)
+# (e) N4 com fuga aditiva sobre a medida a V_DS = 2 V
+a = ax[1, 1]; vg = np.linspace(0, 20, 300); r4 = sublimiar.regiao.V_GS
+I_leak = sublimiar.constantes["I_leak"]
+a.semilogy(c2.V_GS, c2.I_D_uA * 1e6, "k.", label="Org1 medida (V_DS = 2 V)")
+a.semilogy(vg, ovsed.corrente_ovsed_uA(vg, 2, p) * 1e6, "k-", lw=1, label="OVSED completo")
+a.semilogy(vg, ovsed.corrente_ovsed_uA(vg, 2, p, com_leak=False) * 1e6, "k:", label="OVSED sem I_leak (canal)")
+v = np.linspace(*r4, 100)
+a.semilogy(v, sublimiar.gerador(v, np.full_like(v, 2.0)), cor_n["N4"], lw=2, label=ROTULO["N4"])
+a.semilogy(v, sublimiar.gerador(v, np.full_like(v, 2.0)) - I_leak, "--", color=cor_n["N4"], lw=1,
+           label="termo exponencial do N4 (sem fuga)")
+a.axhline(I_leak, color="grey", lw=0.8, ls="-.", label=f"I_leak = {I_leak:g} pA")
+a.axvspan(*r4, color=cor_n["N4"], alpha=0.08)
+a.set(xlabel="V_GS (V)", ylabel="I_D (pA)", title=f"(e) N4 com fuga aditiva (S = {sublimiar.constantes['S']:.3g} V/déc)",
+      xlim=(0, 20), ylim=(1e-3, 3e4))
+a.legend(fontsize=7)
+
+# (f) N4 e OVSED contra a medida na região do N4
+a = ax[1, 2]; m2 = (c2.V_GS >= r4[0]) & (c2.V_GS <= r4[1])
+vgm, Im = c2.V_GS[m2], c2.I_D_uA[m2] * 1e6
+a.axhline(0, color="k", lw=0.5)
+a.plot(vgm, np.log10(sublimiar.gerador(vgm, c2.V_DS[m2]) / Im), "o", color=cor_n["N4"],
+       label=f"N4 (RMSE {erro_vs_medida_org1(sublimiar, curvas)['rmse_log10']:.3f} déc)")
+a.plot(vgm, np.log10(ovsed.corrente_ovsed_uA(vgm, 2, p) * 1e6 / Im), "ks", mfc="none", label="OVSED completo")
+a.set(xlabel="V_GS (V)", ylabel="log10(I_D,modelo / I_D,medida) (déc)", title="(f) Região do N4: desvio contra a medida",
+      xlim=(4, r4[1]), ylim=(-0.3, 0.3))
+a.legend(fontsize=7)
+
 fig.tight_layout(); fig.savefig(DIR_RESULTADOS / "fig_niveis_vs_ovsed_org1.png", dpi=150)
 plt.show()
 """)
