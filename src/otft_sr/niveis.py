@@ -334,7 +334,7 @@ def erro_vs_ovsed(n: NivelEquacao, p: ParametrosOVSED | None = None) -> dict[str
 
 N5_DOCUMENTACAO = (
     "N5 (saturação com R_S): I_D = K (V_GS - V_Th - I_D R_S)^(gamma+2) é implícita em I_D; "
-    "a AST e os motores (DEAP/gplearn/PySR) só representam y = f(X) explícita. Fica como "
+    "a AST e os algoritmos de RS (DEAP, gplearn, PySR) só representam y = f(X) explícita. Fica como "
     "trabalho futuro (ex.: oferecer I_D como entrada e buscar o resíduo, ou RS sobre a "
     "inversa V_GS(I_D, V_DS)). Para a Org1, I_D R_S <= ~0,1 V (I_D < 10 µA, R_S = 10 kΩ): "
     "efeito de R_S < 1% em I_D na faixa medida."
