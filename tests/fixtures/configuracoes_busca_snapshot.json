@@ -1,0 +1,1394 @@
+{
+ "deap/calibrada": {
+  "data": {
+   "exp4": {
+    "levels": [
+     0.01,
+     0.03,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ]
+   },
+   "exp5": {
+    "levels": [
+     0.01,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ],
+    "mean_fraction": 0.01
+   },
+   "max_steps": 1000,
+   "n_simulations": 500,
+   "n_time_points": 100,
+   "noise": {
+    "location": "target",
+    "sigma_fraction": 0.01
+   },
+   "split": {
+    "test": 0.15,
+    "train": 0.7,
+    "validation": 0.15
+   }
+  },
+  "experiments": {
+   "algorithms": [
+    "deap",
+    "gplearn",
+    "pysr"
+   ],
+   "baseline_only": true,
+   "benchmark_prompt": "E",
+   "max_cell_seconds": 1800.0,
+   "models": [],
+   "noise_model": "fake",
+   "noise_prompt": "E",
+   "repetitions": 3,
+   "run": [
+    "baseline",
+    "noise_robustness",
+    "biased_noise"
+   ],
+   "scenarios": [
+    "free_fall",
+    "harmonic_motion",
+    "damped_wave"
+   ]
+  },
+  "llm": {
+   "backend": "fake",
+   "batch_size": 1,
+   "cache_dir": ".cache/llm_nb01",
+   "cache_enabled": false,
+   "cache_key_mode": "exact",
+   "cache_significant_digits": 3,
+   "evaluation_scope": "all",
+   "failure_policy": "retry",
+   "max_new_tokens": 64,
+   "max_retries": 1,
+   "models": [
+    {
+     "checkpoint": "fake-evaluator",
+     "infra": "local",
+     "name": "fake",
+     "quantization": null,
+     "revision": null
+    }
+   ],
+   "ollama_endpoint": "http://localhost:11434",
+   "prompt_variants": [
+    "E"
+   ],
+   "prompts_dir": null,
+   "request_timeout_s": 120.0,
+   "seed": 42,
+   "temperature": 0.0,
+   "top_k": null
+  },
+  "loss": {
+   "baseline_weights": [
+    0.9970089730807579,
+    0.0029910269192422734,
+    0.0
+   ],
+   "max_nodes": 30,
+   "normalization": "normalized",
+   "w1": 0.987166831194472,
+   "w2": 0.002961500493583416,
+   "w3": 0.00987166831194472
+  },
+  "mode": "pilot",
+  "output_dir": "results",
+  "physics": {
+   "damped_wave": {
+    "amplitude": 1.0,
+    "angular_frequency": 6.283185307179586,
+    "wave_number": 6.283185307179586
+   },
+   "free_fall": {
+    "gravity": 9.81
+   },
+   "harmonic_motion": {
+    "phase": 0.0,
+    "spring_constant": 10.0
+   },
+   "sampling": {
+    "damping": {
+     "high": 1.0,
+     "low": 0.0
+    },
+    "height": {
+     "high": 100.0,
+     "low": 1.0
+    },
+    "length": {
+     "high": 0.5,
+     "low": 0.01
+    },
+    "mass": {
+     "high": 10.0,
+     "low": 0.1
+    }
+   }
+  },
+  "seeds": {
+   "master": 0
+  },
+  "sr": {
+   "deap": {
+    "crossover_prob": 0.7,
+    "init_max_depth": 3,
+    "init_min_depth": 1,
+    "max_depth": 8,
+    "mutation_prob": 0.2,
+    "tournament_size": 7
+   },
+   "early_stopping": {
+    "enabled": false,
+    "min_relative_improvement": 0.001,
+    "patience": 3
+   },
+   "generations": 200,
+   "gplearn": {
+    "const_range": [
+     -1.0,
+     1.0
+    ],
+    "init_depth": [
+     1,
+     8
+    ],
+    "p_crossover": 0.9,
+    "p_hoist_mutation": 0.01,
+    "p_point_mutation": 0.01,
+    "p_subtree_mutation": 0.01,
+    "parsimony_coefficient": 0.001,
+    "tournament_size": 3
+   },
+   "operators": {
+    "deap": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos",
+     "pow"
+    ],
+    "gplearn": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ],
+    "pysr": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "pow",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ]
+   },
+   "population": 500,
+   "pysr": {
+    "huber_delta": 1.0,
+    "loss": "mse",
+    "maxsize": 30,
+    "ncycles_per_iteration": 50,
+    "niterations": 10,
+    "population_size": 50,
+    "populations": 1,
+    "tournament_selection_n": 15
+   }
+  },
+  "symbolic": {
+   "division_epsilon": 0.001,
+   "division_fallback": 1.0,
+   "exp_clip": 100.0,
+   "log_epsilon": 0.001,
+   "power_clip": 1000000.0,
+   "tree_distance": {
+    "canonicalize": true,
+    "descend_on_operator_mismatch": true
+   },
+   "tree_distance_constant_penalty": 1.0
+  },
+  "track": "extended_analysis"
+ },
+ "deap/verificacao": {
+  "data": {
+   "exp4": {
+    "levels": [
+     0.01,
+     0.03,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ]
+   },
+   "exp5": {
+    "levels": [
+     0.01,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ],
+    "mean_fraction": 0.01
+   },
+   "max_steps": 1000,
+   "n_simulations": 500,
+   "n_time_points": 100,
+   "noise": {
+    "location": "target",
+    "sigma_fraction": 0.01
+   },
+   "split": {
+    "test": 0.15,
+    "train": 0.7,
+    "validation": 0.15
+   }
+  },
+  "experiments": {
+   "algorithms": [
+    "deap",
+    "gplearn",
+    "pysr"
+   ],
+   "baseline_only": true,
+   "benchmark_prompt": "E",
+   "max_cell_seconds": 1800.0,
+   "models": [],
+   "noise_model": "fake",
+   "noise_prompt": "E",
+   "repetitions": 3,
+   "run": [
+    "baseline",
+    "noise_robustness",
+    "biased_noise"
+   ],
+   "scenarios": [
+    "free_fall",
+    "harmonic_motion",
+    "damped_wave"
+   ]
+  },
+  "llm": {
+   "backend": "fake",
+   "batch_size": 1,
+   "cache_dir": ".cache/llm_nb01",
+   "cache_enabled": false,
+   "cache_key_mode": "exact",
+   "cache_significant_digits": 3,
+   "evaluation_scope": "all",
+   "failure_policy": "retry",
+   "max_new_tokens": 64,
+   "max_retries": 1,
+   "models": [
+    {
+     "checkpoint": "fake-evaluator",
+     "infra": "local",
+     "name": "fake",
+     "quantization": null,
+     "revision": null
+    }
+   ],
+   "ollama_endpoint": "http://localhost:11434",
+   "prompt_variants": [
+    "E"
+   ],
+   "prompts_dir": null,
+   "request_timeout_s": 120.0,
+   "seed": 42,
+   "temperature": 0.0,
+   "top_k": null
+  },
+  "loss": {
+   "baseline_weights": [
+    0.9970089730807579,
+    0.0029910269192422734,
+    0.0
+   ],
+   "max_nodes": 30,
+   "normalization": "normalized",
+   "w1": 0.987166831194472,
+   "w2": 0.002961500493583416,
+   "w3": 0.00987166831194472
+  },
+  "mode": "pilot",
+  "output_dir": "results",
+  "physics": {
+   "damped_wave": {
+    "amplitude": 1.0,
+    "angular_frequency": 6.283185307179586,
+    "wave_number": 6.283185307179586
+   },
+   "free_fall": {
+    "gravity": 9.81
+   },
+   "harmonic_motion": {
+    "phase": 0.0,
+    "spring_constant": 10.0
+   },
+   "sampling": {
+    "damping": {
+     "high": 1.0,
+     "low": 0.0
+    },
+    "height": {
+     "high": 100.0,
+     "low": 1.0
+    },
+    "length": {
+     "high": 0.5,
+     "low": 0.01
+    },
+    "mass": {
+     "high": 10.0,
+     "low": 0.1
+    }
+   }
+  },
+  "seeds": {
+   "master": 0
+  },
+  "sr": {
+   "deap": {
+    "crossover_prob": 0.05,
+    "init_max_depth": 3,
+    "init_min_depth": 1,
+    "max_depth": 8,
+    "mutation_prob": 0.01,
+    "tournament_size": 3
+   },
+   "early_stopping": {
+    "enabled": false,
+    "min_relative_improvement": 0.001,
+    "patience": 3
+   },
+   "generations": 4,
+   "gplearn": {
+    "const_range": [
+     -1.0,
+     1.0
+    ],
+    "init_depth": [
+     1,
+     8
+    ],
+    "p_crossover": 0.9,
+    "p_hoist_mutation": 0.01,
+    "p_point_mutation": 0.01,
+    "p_subtree_mutation": 0.01,
+    "parsimony_coefficient": 0.001,
+    "tournament_size": 3
+   },
+   "operators": {
+    "deap": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos",
+     "pow"
+    ],
+    "gplearn": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ],
+    "pysr": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "pow",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ]
+   },
+   "population": 40,
+   "pysr": {
+    "huber_delta": 1.0,
+    "loss": "mse",
+    "maxsize": 30,
+    "ncycles_per_iteration": 50,
+    "niterations": 10,
+    "population_size": 50,
+    "populations": 1,
+    "tournament_selection_n": 15
+   }
+  },
+  "symbolic": {
+   "division_epsilon": 0.001,
+   "division_fallback": 1.0,
+   "exp_clip": 100.0,
+   "log_epsilon": 0.001,
+   "power_clip": 1000000.0,
+   "tree_distance": {
+    "canonicalize": true,
+    "descend_on_operator_mismatch": true
+   },
+   "tree_distance_constant_penalty": 1.0
+  },
+  "track": "extended_analysis"
+ },
+ "gplearn/calibrada": {
+  "data": {
+   "exp4": {
+    "levels": [
+     0.01,
+     0.03,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ]
+   },
+   "exp5": {
+    "levels": [
+     0.01,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ],
+    "mean_fraction": 0.01
+   },
+   "max_steps": 1000,
+   "n_simulations": 500,
+   "n_time_points": 100,
+   "noise": {
+    "location": "target",
+    "sigma_fraction": 0.01
+   },
+   "split": {
+    "test": 0.15,
+    "train": 0.7,
+    "validation": 0.15
+   }
+  },
+  "experiments": {
+   "algorithms": [
+    "deap",
+    "gplearn",
+    "pysr"
+   ],
+   "baseline_only": true,
+   "benchmark_prompt": "E",
+   "max_cell_seconds": 1800.0,
+   "models": [],
+   "noise_model": "fake",
+   "noise_prompt": "E",
+   "repetitions": 3,
+   "run": [
+    "baseline",
+    "noise_robustness",
+    "biased_noise"
+   ],
+   "scenarios": [
+    "free_fall",
+    "harmonic_motion",
+    "damped_wave"
+   ]
+  },
+  "llm": {
+   "backend": "fake",
+   "batch_size": 1,
+   "cache_dir": ".cache/llm_nb01",
+   "cache_enabled": false,
+   "cache_key_mode": "exact",
+   "cache_significant_digits": 3,
+   "evaluation_scope": "all",
+   "failure_policy": "retry",
+   "max_new_tokens": 64,
+   "max_retries": 1,
+   "models": [
+    {
+     "checkpoint": "fake-evaluator",
+     "infra": "local",
+     "name": "fake",
+     "quantization": null,
+     "revision": null
+    }
+   ],
+   "ollama_endpoint": "http://localhost:11434",
+   "prompt_variants": [
+    "E"
+   ],
+   "prompts_dir": null,
+   "request_timeout_s": 120.0,
+   "seed": 42,
+   "temperature": 0.0,
+   "top_k": null
+  },
+  "loss": {
+   "baseline_weights": [
+    0.9970089730807579,
+    0.0029910269192422734,
+    0.0
+   ],
+   "max_nodes": 30,
+   "normalization": "normalized",
+   "w1": 0.987166831194472,
+   "w2": 0.002961500493583416,
+   "w3": 0.00987166831194472
+  },
+  "mode": "pilot",
+  "output_dir": "results",
+  "physics": {
+   "damped_wave": {
+    "amplitude": 1.0,
+    "angular_frequency": 6.283185307179586,
+    "wave_number": 6.283185307179586
+   },
+   "free_fall": {
+    "gravity": 9.81
+   },
+   "harmonic_motion": {
+    "phase": 0.0,
+    "spring_constant": 10.0
+   },
+   "sampling": {
+    "damping": {
+     "high": 1.0,
+     "low": 0.0
+    },
+    "height": {
+     "high": 100.0,
+     "low": 1.0
+    },
+    "length": {
+     "high": 0.5,
+     "low": 0.01
+    },
+    "mass": {
+     "high": 10.0,
+     "low": 0.1
+    }
+   }
+  },
+  "seeds": {
+   "master": 0
+  },
+  "sr": {
+   "deap": {
+    "crossover_prob": 0.05,
+    "init_max_depth": 3,
+    "init_min_depth": 1,
+    "max_depth": 8,
+    "mutation_prob": 0.01,
+    "tournament_size": 3
+   },
+   "early_stopping": {
+    "enabled": false,
+    "min_relative_improvement": 0.001,
+    "patience": 3
+   },
+   "generations": 100,
+   "gplearn": {
+    "const_range": [
+     0.0,
+     20.0
+    ],
+    "init_depth": [
+     1,
+     8
+    ],
+    "p_crossover": 0.7,
+    "p_hoist_mutation": 0.05,
+    "p_point_mutation": 0.1,
+    "p_subtree_mutation": 0.1,
+    "parsimony_coefficient": 0.001,
+    "tournament_size": 20
+   },
+   "operators": {
+    "deap": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos",
+     "pow"
+    ],
+    "gplearn": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ],
+    "pysr": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "pow",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ]
+   },
+   "population": 1000,
+   "pysr": {
+    "huber_delta": 1.0,
+    "loss": "mse",
+    "maxsize": 30,
+    "ncycles_per_iteration": 50,
+    "niterations": 10,
+    "population_size": 50,
+    "populations": 1,
+    "tournament_selection_n": 15
+   }
+  },
+  "symbolic": {
+   "division_epsilon": 0.001,
+   "division_fallback": 1.0,
+   "exp_clip": 100.0,
+   "log_epsilon": 0.001,
+   "power_clip": 1000000.0,
+   "tree_distance": {
+    "canonicalize": true,
+    "descend_on_operator_mismatch": true
+   },
+   "tree_distance_constant_penalty": 1.0
+  },
+  "track": "extended_analysis"
+ },
+ "gplearn/verificacao": {
+  "data": {
+   "exp4": {
+    "levels": [
+     0.01,
+     0.03,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ]
+   },
+   "exp5": {
+    "levels": [
+     0.01,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ],
+    "mean_fraction": 0.01
+   },
+   "max_steps": 1000,
+   "n_simulations": 500,
+   "n_time_points": 100,
+   "noise": {
+    "location": "target",
+    "sigma_fraction": 0.01
+   },
+   "split": {
+    "test": 0.15,
+    "train": 0.7,
+    "validation": 0.15
+   }
+  },
+  "experiments": {
+   "algorithms": [
+    "deap",
+    "gplearn",
+    "pysr"
+   ],
+   "baseline_only": true,
+   "benchmark_prompt": "E",
+   "max_cell_seconds": 1800.0,
+   "models": [],
+   "noise_model": "fake",
+   "noise_prompt": "E",
+   "repetitions": 3,
+   "run": [
+    "baseline",
+    "noise_robustness",
+    "biased_noise"
+   ],
+   "scenarios": [
+    "free_fall",
+    "harmonic_motion",
+    "damped_wave"
+   ]
+  },
+  "llm": {
+   "backend": "fake",
+   "batch_size": 1,
+   "cache_dir": ".cache/llm_nb01",
+   "cache_enabled": false,
+   "cache_key_mode": "exact",
+   "cache_significant_digits": 3,
+   "evaluation_scope": "all",
+   "failure_policy": "retry",
+   "max_new_tokens": 64,
+   "max_retries": 1,
+   "models": [
+    {
+     "checkpoint": "fake-evaluator",
+     "infra": "local",
+     "name": "fake",
+     "quantization": null,
+     "revision": null
+    }
+   ],
+   "ollama_endpoint": "http://localhost:11434",
+   "prompt_variants": [
+    "E"
+   ],
+   "prompts_dir": null,
+   "request_timeout_s": 120.0,
+   "seed": 42,
+   "temperature": 0.0,
+   "top_k": null
+  },
+  "loss": {
+   "baseline_weights": [
+    0.9970089730807579,
+    0.0029910269192422734,
+    0.0
+   ],
+   "max_nodes": 30,
+   "normalization": "normalized",
+   "w1": 0.987166831194472,
+   "w2": 0.002961500493583416,
+   "w3": 0.00987166831194472
+  },
+  "mode": "pilot",
+  "output_dir": "results",
+  "physics": {
+   "damped_wave": {
+    "amplitude": 1.0,
+    "angular_frequency": 6.283185307179586,
+    "wave_number": 6.283185307179586
+   },
+   "free_fall": {
+    "gravity": 9.81
+   },
+   "harmonic_motion": {
+    "phase": 0.0,
+    "spring_constant": 10.0
+   },
+   "sampling": {
+    "damping": {
+     "high": 1.0,
+     "low": 0.0
+    },
+    "height": {
+     "high": 100.0,
+     "low": 1.0
+    },
+    "length": {
+     "high": 0.5,
+     "low": 0.01
+    },
+    "mass": {
+     "high": 10.0,
+     "low": 0.1
+    }
+   }
+  },
+  "seeds": {
+   "master": 0
+  },
+  "sr": {
+   "deap": {
+    "crossover_prob": 0.05,
+    "init_max_depth": 3,
+    "init_min_depth": 1,
+    "max_depth": 8,
+    "mutation_prob": 0.01,
+    "tournament_size": 3
+   },
+   "early_stopping": {
+    "enabled": false,
+    "min_relative_improvement": 0.001,
+    "patience": 3
+   },
+   "generations": 4,
+   "gplearn": {
+    "const_range": [
+     -1.0,
+     1.0
+    ],
+    "init_depth": [
+     1,
+     8
+    ],
+    "p_crossover": 0.9,
+    "p_hoist_mutation": 0.01,
+    "p_point_mutation": 0.01,
+    "p_subtree_mutation": 0.01,
+    "parsimony_coefficient": 0.001,
+    "tournament_size": 3
+   },
+   "operators": {
+    "deap": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos",
+     "pow"
+    ],
+    "gplearn": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ],
+    "pysr": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "pow",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ]
+   },
+   "population": 40,
+   "pysr": {
+    "huber_delta": 1.0,
+    "loss": "mse",
+    "maxsize": 30,
+    "ncycles_per_iteration": 50,
+    "niterations": 10,
+    "population_size": 50,
+    "populations": 1,
+    "tournament_selection_n": 15
+   }
+  },
+  "symbolic": {
+   "division_epsilon": 0.001,
+   "division_fallback": 1.0,
+   "exp_clip": 100.0,
+   "log_epsilon": 0.001,
+   "power_clip": 1000000.0,
+   "tree_distance": {
+    "canonicalize": true,
+    "descend_on_operator_mismatch": true
+   },
+   "tree_distance_constant_penalty": 1.0
+  },
+  "track": "extended_analysis"
+ },
+ "pysr/calibrada": {
+  "data": {
+   "exp4": {
+    "levels": [
+     0.01,
+     0.03,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ]
+   },
+   "exp5": {
+    "levels": [
+     0.01,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ],
+    "mean_fraction": 0.01
+   },
+   "max_steps": 1000,
+   "n_simulations": 500,
+   "n_time_points": 100,
+   "noise": {
+    "location": "target",
+    "sigma_fraction": 0.01
+   },
+   "split": {
+    "test": 0.15,
+    "train": 0.7,
+    "validation": 0.15
+   }
+  },
+  "experiments": {
+   "algorithms": [
+    "deap",
+    "gplearn",
+    "pysr"
+   ],
+   "baseline_only": true,
+   "benchmark_prompt": "E",
+   "max_cell_seconds": 1800.0,
+   "models": [],
+   "noise_model": "fake",
+   "noise_prompt": "E",
+   "repetitions": 3,
+   "run": [
+    "baseline",
+    "noise_robustness",
+    "biased_noise"
+   ],
+   "scenarios": [
+    "free_fall",
+    "harmonic_motion",
+    "damped_wave"
+   ]
+  },
+  "llm": {
+   "backend": "fake",
+   "batch_size": 1,
+   "cache_dir": ".cache/llm_nb01",
+   "cache_enabled": false,
+   "cache_key_mode": "exact",
+   "cache_significant_digits": 3,
+   "evaluation_scope": "all",
+   "failure_policy": "retry",
+   "max_new_tokens": 64,
+   "max_retries": 1,
+   "models": [
+    {
+     "checkpoint": "fake-evaluator",
+     "infra": "local",
+     "name": "fake",
+     "quantization": null,
+     "revision": null
+    }
+   ],
+   "ollama_endpoint": "http://localhost:11434",
+   "prompt_variants": [
+    "E"
+   ],
+   "prompts_dir": null,
+   "request_timeout_s": 120.0,
+   "seed": 42,
+   "temperature": 0.0,
+   "top_k": null
+  },
+  "loss": {
+   "baseline_weights": [
+    0.9970089730807579,
+    0.0029910269192422734,
+    0.0
+   ],
+   "max_nodes": 30,
+   "normalization": "normalized",
+   "w1": 0.987166831194472,
+   "w2": 0.002961500493583416,
+   "w3": 0.00987166831194472
+  },
+  "mode": "pilot",
+  "output_dir": "results",
+  "physics": {
+   "damped_wave": {
+    "amplitude": 1.0,
+    "angular_frequency": 6.283185307179586,
+    "wave_number": 6.283185307179586
+   },
+   "free_fall": {
+    "gravity": 9.81
+   },
+   "harmonic_motion": {
+    "phase": 0.0,
+    "spring_constant": 10.0
+   },
+   "sampling": {
+    "damping": {
+     "high": 1.0,
+     "low": 0.0
+    },
+    "height": {
+     "high": 100.0,
+     "low": 1.0
+    },
+    "length": {
+     "high": 0.5,
+     "low": 0.01
+    },
+    "mass": {
+     "high": 10.0,
+     "low": 0.1
+    }
+   }
+  },
+  "seeds": {
+   "master": 0
+  },
+  "sr": {
+   "deap": {
+    "crossover_prob": 0.05,
+    "init_max_depth": 3,
+    "init_min_depth": 1,
+    "max_depth": 8,
+    "mutation_prob": 0.01,
+    "tournament_size": 3
+   },
+   "early_stopping": {
+    "enabled": false,
+    "min_relative_improvement": 0.001,
+    "patience": 3
+   },
+   "generations": 50,
+   "gplearn": {
+    "const_range": [
+     -1.0,
+     1.0
+    ],
+    "init_depth": [
+     1,
+     8
+    ],
+    "p_crossover": 0.9,
+    "p_hoist_mutation": 0.01,
+    "p_point_mutation": 0.01,
+    "p_subtree_mutation": 0.01,
+    "parsimony_coefficient": 0.001,
+    "tournament_size": 3
+   },
+   "operators": {
+    "deap": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos",
+     "pow"
+    ],
+    "gplearn": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ],
+    "pysr": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "pow",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ]
+   },
+   "population": 100,
+   "pysr": {
+    "huber_delta": 1.0,
+    "loss": "mse",
+    "maxsize": 30,
+    "ncycles_per_iteration": 200,
+    "niterations": 20,
+    "population_size": 50,
+    "populations": 8,
+    "tournament_selection_n": 15
+   }
+  },
+  "symbolic": {
+   "division_epsilon": 0.001,
+   "division_fallback": 1.0,
+   "exp_clip": 100.0,
+   "log_epsilon": 0.001,
+   "power_clip": 1000000.0,
+   "tree_distance": {
+    "canonicalize": true,
+    "descend_on_operator_mismatch": true
+   },
+   "tree_distance_constant_penalty": 1.0
+  },
+  "track": "extended_analysis"
+ },
+ "pysr/verificacao": {
+  "data": {
+   "exp4": {
+    "levels": [
+     0.01,
+     0.03,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ]
+   },
+   "exp5": {
+    "levels": [
+     0.01,
+     0.05
+    ],
+    "locations": [
+     "target"
+    ],
+    "mean_fraction": 0.01
+   },
+   "max_steps": 1000,
+   "n_simulations": 500,
+   "n_time_points": 100,
+   "noise": {
+    "location": "target",
+    "sigma_fraction": 0.01
+   },
+   "split": {
+    "test": 0.15,
+    "train": 0.7,
+    "validation": 0.15
+   }
+  },
+  "experiments": {
+   "algorithms": [
+    "deap",
+    "gplearn",
+    "pysr"
+   ],
+   "baseline_only": true,
+   "benchmark_prompt": "E",
+   "max_cell_seconds": 1800.0,
+   "models": [],
+   "noise_model": "fake",
+   "noise_prompt": "E",
+   "repetitions": 3,
+   "run": [
+    "baseline",
+    "noise_robustness",
+    "biased_noise"
+   ],
+   "scenarios": [
+    "free_fall",
+    "harmonic_motion",
+    "damped_wave"
+   ]
+  },
+  "llm": {
+   "backend": "fake",
+   "batch_size": 1,
+   "cache_dir": ".cache/llm_nb01",
+   "cache_enabled": false,
+   "cache_key_mode": "exact",
+   "cache_significant_digits": 3,
+   "evaluation_scope": "all",
+   "failure_policy": "retry",
+   "max_new_tokens": 64,
+   "max_retries": 1,
+   "models": [
+    {
+     "checkpoint": "fake-evaluator",
+     "infra": "local",
+     "name": "fake",
+     "quantization": null,
+     "revision": null
+    }
+   ],
+   "ollama_endpoint": "http://localhost:11434",
+   "prompt_variants": [
+    "E"
+   ],
+   "prompts_dir": null,
+   "request_timeout_s": 120.0,
+   "seed": 42,
+   "temperature": 0.0,
+   "top_k": null
+  },
+  "loss": {
+   "baseline_weights": [
+    0.9970089730807579,
+    0.0029910269192422734,
+    0.0
+   ],
+   "max_nodes": 30,
+   "normalization": "normalized",
+   "w1": 0.987166831194472,
+   "w2": 0.002961500493583416,
+   "w3": 0.00987166831194472
+  },
+  "mode": "pilot",
+  "output_dir": "results",
+  "physics": {
+   "damped_wave": {
+    "amplitude": 1.0,
+    "angular_frequency": 6.283185307179586,
+    "wave_number": 6.283185307179586
+   },
+   "free_fall": {
+    "gravity": 9.81
+   },
+   "harmonic_motion": {
+    "phase": 0.0,
+    "spring_constant": 10.0
+   },
+   "sampling": {
+    "damping": {
+     "high": 1.0,
+     "low": 0.0
+    },
+    "height": {
+     "high": 100.0,
+     "low": 1.0
+    },
+    "length": {
+     "high": 0.5,
+     "low": 0.01
+    },
+    "mass": {
+     "high": 10.0,
+     "low": 0.1
+    }
+   }
+  },
+  "seeds": {
+   "master": 0
+  },
+  "sr": {
+   "deap": {
+    "crossover_prob": 0.05,
+    "init_max_depth": 3,
+    "init_min_depth": 1,
+    "max_depth": 8,
+    "mutation_prob": 0.01,
+    "tournament_size": 3
+   },
+   "early_stopping": {
+    "enabled": false,
+    "min_relative_improvement": 0.001,
+    "patience": 3
+   },
+   "generations": 50,
+   "gplearn": {
+    "const_range": [
+     -1.0,
+     1.0
+    ],
+    "init_depth": [
+     1,
+     8
+    ],
+    "p_crossover": 0.9,
+    "p_hoist_mutation": 0.01,
+    "p_point_mutation": 0.01,
+    "p_subtree_mutation": 0.01,
+    "parsimony_coefficient": 0.001,
+    "tournament_size": 3
+   },
+   "operators": {
+    "deap": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos",
+     "pow"
+    ],
+    "gplearn": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ],
+    "pysr": [
+     "add",
+     "sub",
+     "mul",
+     "div",
+     "pow",
+     "neg",
+     "exp",
+     "log",
+     "sin",
+     "cos"
+    ]
+   },
+   "population": 100,
+   "pysr": {
+    "huber_delta": 1.0,
+    "loss": "mse",
+    "maxsize": 30,
+    "ncycles_per_iteration": 20,
+    "niterations": 2,
+    "population_size": 20,
+    "populations": 2,
+    "tournament_selection_n": 15
+   }
+  },
+  "symbolic": {
+   "division_epsilon": 0.001,
+   "division_fallback": 1.0,
+   "exp_clip": 100.0,
+   "log_epsilon": 0.001,
+   "power_clip": 1000000.0,
+   "tree_distance": {
+    "canonicalize": true,
+    "descend_on_operator_mismatch": true
+   },
+   "tree_distance_constant_penalty": 1.0
+  },
+  "track": "extended_analysis"
+ }
+}
