@@ -87,8 +87,10 @@ def test_equivalencia_sympy_reconhece_formas_reescritas():
 
     P = lambda s: parse_infix(s, FEATURES)  # noqa: E731
     n1, n2, n4 = (nivel(i) for i in ("N1", "N3", "N4"))
-    assert mesma_forma_funcional(P("log(1.00064 ** (4.15 ** V_GS))"), P(n4.expressao))
-    assert mesma_forma_funcional(P("exp(1.42 * V_GS - 7.35)"), P(n4.expressao))
+    # N4 com fuga aditiva (H-OTFT-12): I_leak + I_0 exp(c V_GS)
+    assert mesma_forma_funcional(P("64.1 + log(1.0095 ** (2.69 ** V_GS))"), P(n4.expressao))
+    assert mesma_forma_funcional(P("exp(0.99 * V_GS - 4.66) + 65.3"), P(n4.expressao))
+    assert not mesma_forma_funcional(P("exp(0.99 * V_GS - 4.66)"), P(n4.expressao))  # sem fuga
     assert mesma_forma_funcional(P("0.0083 * V_GS ** 2 - 0.33 * V_GS + 3.4"), P(n1.expressao))
     assert not mesma_forma_funcional(P("1.048 ** V_GS - 3.33"), P(n1.expressao))
     assert not mesma_forma_funcional(P("4.1e-05 * (V_GS - 8.6) ** 3.0"), P(n2.expressao))

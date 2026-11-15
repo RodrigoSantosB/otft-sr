@@ -8,10 +8,10 @@ física de dispositivo.
 
 | Id (= nível da proposta) | Nome científico | Equação | Região | Id antes do alinhamento |
 |---|---|---|---|---|
-| N1 | Saturação quadrática ideal | I_D = K (V_GS − V_Th)² | saturação (controle canônico) | N1 |
+| N1 | Saturação quadrática ideal | I_D = K (V_GS − V_Th)² | saturação, V_GS 25–50 V (controle canônico) | N1 |
 | N2 | Regime linear (triodo) com termo quadrático em V_DS | I_D = K (2 (V_GS − V_Th) V_DS − V_DS²) | triodo (V_DS ≤ V_GS − V_Th) | N3 |
-| N3 | Saturação com mobilidade em lei de potência | I_D = K (V_GS − V_th0)^l | acumulação forte, F_sat constante | N2 |
-| N4 | Corrente sublimiar exponencial | I_D = I_0 exp(ln10 V_GS / S) | sublimiar, I_leak removido (pA) | N4 |
+| N3 | Saturação com mobilidade em lei de potência | I_D = K (V_GS − V_th0)^l | saturação perto do limiar, V_GS 10,5–28 V, F_sat constante (H-OTFT-18) | N2 |
+| N4 | Corrente sublimiar exponencial | I_D = I_leak + I_0 exp(ln10 V_GS / S) | sublimiar observável, V_GS 0–10 V, I_leak = 65 pA aditivo (pA; H-OTFT-17) | N4 |
 | N5 | Saturação com resistência de contato | implícita com R_S | só documentado (H-OTFT-08) | N5 |
 
 ## Ambiente

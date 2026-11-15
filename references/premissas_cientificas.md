@@ -13,9 +13,9 @@ gerados por `src/otft_sr/niveis.py` (constantes arredondadas a 4 algarismos sign
 - **H-OTFT-03 — Unidades dos dados medidos.** Transferência (`*VDS.csv`): I_D em A;
   saída (`*VGS.csv`): rotulada A, lida como µA (`experimental_data_scale_output = uA`).
 - **H-OTFT-04 — Ancoragem das constantes.** Em cada nível, as constantes livres são
-  ajustadas ao OVSED completo da Org1 (R_S e I_leak incluídos; I_leak removido em N4) na
-  região do nível, por mínimo erro relativo quadrático (N1, N2, N3) ou regressão de
-  log10 I_D (N4). Os dados de cada nível são gerados pela própria equação do nível
+  ajustadas ao OVSED completo da Org1 (R_S e I_leak incluídos em todos os níveis) na
+  região do nível, por mínimo erro relativo quadrático (N1, N2, N3) ou mínimo erro em
+  log10 I_D (N4, com I_leak fixo no valor do OVSED; H-OTFT-17). Os dados de cada nível são gerados pela própria equação do nível
   (gerador = expressão de referência); o desvio para o OVSED é medido à parte.
 - **H-OTFT-05 — N2 (regime linear) na forma quadrática clássica, restrita ao triodo.** A alternativa
   F_sat ≈ tanh(V_DS/(α V_ov)) exige tanh, fora do conjunto de operadores; escrita com exp
@@ -41,7 +41,7 @@ gerados por `src/otft_sr/niveis.py` (constantes arredondadas a 4 algarismos sign
   c^f(V) -> exp(f log c), expand_log, expansão em termos, constantes mascaradas, expoentes
   reais a 2 decimais). Classe "recupera estrutura (equivalência sympy)" exige também
   1 − R² ≤ 1e-3. Motivo: o PySR devolveu log(1,00064^(4,15^V_GS)), idêntico a
-  I_0 exp(1,423 V_GS), com distância algébrica 1.
+  I_0 exp(1,423 V_GS) (N4 anterior a H-OTFT-17), com distância algébrica 1.
 - **H-OTFT-08 — N5 (saturação com resistência de contato) fora do escopo de execução.** I_D = K (V_GS − V_Th − I_D R_C)^(γ+2) é
   implícita; os algoritmos de RS só buscam y = f(X) explícita. Para a Org1, I_D R_S ≤ ~0,1 V
   (I_D < 10 µA, R_S = 10 kΩ), efeito < 1 % na faixa medida. Trabalho futuro: RS sobre a
@@ -52,18 +52,25 @@ gerados por `src/otft_sr/niveis.py` (constantes arredondadas a 4 algarismos sign
   proposta §5.2). Variantes D/F/G/H (revelam a GT) existem só por exigência da biblioteca.
 - **H-OTFT-10 — Prompts em inglês.** Textos enviados ao LLM ficam em inglês, como o prompt
   reconstruído do artigo; o restante do projeto está em PT-BR.
-- **H-OTFT-11 — N4 em pA.** Em µA o N4 tem Var(I_D) ~ 1e-15 µA², abaixo do mínimo do modo
-  normalizado da biblioteca (1e-12); a saída do N4 é em pA (fator 1e6), unidade usual para
-  correntes sublimiares.
-- **H-OTFT-12 — S do N4.** O OVSED tem F_sat ∝ q_tot no sublimiar, logo I_D ∝ q_tot^(l+1) e a
-  assíntota é S = ln10·n·V_T/(l+1) ≈ 1,50 V/déc (e não ln10·n·V_T/l ≈ 1,97 V/déc). Na região
-  V_GS ∈ [0, 4] V a inclinação local é 1,60–1,71 V/déc; o N4 usa o S ajustado (≈ 1,62 V/déc).
-  Essa região fica abaixo de I_leak = 65 pA: N4 descreve o canal com I_leak removido, não
-  as medidas.
-- **H-OTFT-13 — N3 (lei de potência) com F_sat constante.** No OVSED, F_sat em saturação varia de 0,074 a 0,17
-  entre V_GS = 20 e 50 V (F_sat ≈ V_gn/(V_gn + 4ΛV_T)); fixá-lo em F_sat,ref ≈ 0,103 dá erro
-  relativo médio de ~24 % contra o OVSED (0,13 década). O expoente efetivo do OVSED em
-  saturação é maior que l.
+- **H-OTFT-11 — N4 em pA.** A saída do N4 é em pA (fator 1e6), unidade usual para correntes
+  sublimiares. Com a fuga aditiva (H-OTFT-17), Var(I_D) ≈ 1e3 pA² nos conjuntos gerados,
+  muito acima do mínimo do modo normalizado da biblioteca (1e-12); o N4 anterior, sem fuga,
+  tinha Var(I_D) ~ 1e-15 µA² e só passava esse mínimo em pA.
+- **H-OTFT-12 — S do N4 é um swing efetivo.** O OVSED tem F_sat ∝ q_tot no sublimiar, logo
+  I_D ∝ q_tot^(l+1) e a assíntota é S = ln10·n·V_T/(l+1) ≈ 1,50 V/déc (e não
+  ln10·n·V_T/l ≈ 1,97 V/déc); em V_GS ∈ [0, 4] V a inclinação local do canal é
+  1,60–1,71 V/déc. Esse sublimiar profundo (0,001–0,2 pA) fica 2 a 5 décadas abaixo de
+  I_leak = 65 pA e não é observável na Org1. O canal só supera I_leak a partir de
+  V_GS ≈ 8,9 V (V_DS = 2 V), onde n = 108 já põe o softplus em transição: a inclinação local
+  sobe de 2,2 V/déc (8 V) para 2,8 V/déc (10 V). O S do N4 (2,33 V/déc) é o swing efetivo
+  dessa transição e depende do limite superior da região (2,01; 2,16; 2,33; 2,51 V/déc para
+  8, 9, 10 e 11 V); não deve ser lido como o S do sublimiar profundo.
+- **H-OTFT-13 — N3 (lei de potência) com F_sat constante.** No OVSED, F_sat em saturação
+  varia de 0,024 a 0,108 na região do N3 (V_GS de 10,5 a 28 V; F_sat ≈ V_gn/(V_gn + 4ΛV_T));
+  fixá-lo em F_sat,ref ≈ 0,055 e usar q_tot ≈ (V_GS − V_th0)/(n V_T) (o softplus ainda não é
+  identidade perto do limiar) dá erro relativo médio de 25 % contra o OVSED (RMSE de 0,140
+  década, máximo de 0,256 década; contra a Org1 medida a V_DS = 50 V, 0,117 década em 19
+  pontos). O expoente efetivo do OVSED em saturação é maior que l.
 - **H-OTFT-14 — V_DS como variável distratora.** Todos os níveis recebem (V_GS, V_DS); em N1,
   N3 e N4 a corrente não depende de V_DS.
 - **H-OTFT-15 — Configuração de busca.** "calibrada" = `best_config.yaml` da queda livre por
@@ -75,6 +82,41 @@ gerados por `src/otft_sr/niveis.py` (constantes arredondadas a 4 algarismos sign
   N1 saturação quadrática ideal (antes N1); N2 regime linear (triodo) com termo quadrático
   em V_DS (antes N3); N3 saturação com mobilidade em lei de potência (antes N2); N4 corrente
   sublimiar exponencial (antes N4); N5 saturação com resistência de contato (só documentado,
-  H-OTFT-08). Só N2 e N3 trocaram de posição; as expressões não mudaram
-  (`tests/test_paridade_niveis.py`). Resultados exportados antes da troca usam a numeração
-  antiga na coluna `nivel`.
+  H-OTFT-08). Na troca de posição as expressões não mudaram; depois, N3 e N4 mudaram de
+  região e de expressão (H-OTFT-17, H-OTFT-18), registradas com as anteriores em
+  `tests/test_paridade_niveis.py`. Resultados exportados antes da troca usam a numeração
+  antiga na coluna `nivel`; os exportados antes da revisão das regiões usam as expressões
+  antigas de N3 e N4 (coluna `expressao` do JSON `niveis_referencia`).
+- **H-OTFT-17 — N4 com fuga aditiva, na região observável.** I_D = I_leak + I_0 exp(V_GS/V_S),
+  V_S = S/ln10, com I_leak = 65 pA fixo (parâmetro do OVSED; ajustado livre daria 64,6 pA) e
+  I_0, S por mínimo erro em log10 contra o OVSED completo. Região: transferência com
+  V_DS ∈ [1, 5] V e V_GS ∈ [0, 10] V, do patamar de fuga até pouco acima do joelho (canal =
+  I_leak em ~8,9 V). Acima de 10 V o erro no limite superior passa de 0,17 década (0,24 em
+  11 V) e o canal deixa de ser exponencial. Resultado: 65,0 + 0,009502 exp(0,9882 V_GS) pA;
+  RMSE de 0,024 década contra o OVSED (máximo de 0,17 década em V_GS = 10 V) e de 0,033
+  década contra a Org1 medida a V_DS = 2 V (6 pontos, V_GS de 4,4 a 10 V; o OVSED completo
+  dá 0,032 década nos mesmos pontos). Sem a fuga, o exponencial fica > 1 década abaixo da
+  medida. Limite: a faixa acima da fuga é curta (0,59 década de faixa dinâmica, ~11 % dos
+  pontos com canal > I_leak); com ruído de 5 % o S ainda é identificável (erro-padrão
+  relativo ~0,9 % por informação de Fisher, 1000 pontos), mas o valor é o swing efetivo de
+  H-OTFT-12. Se o objetivo for o S do sublimiar profundo, a Org1 não o mede: seria preciso um
+  dispositivo ou medida com fuga ≲ 0,01 pA, ou manter um nível sintético auxiliar só com o
+  canal (o N4 anterior, 0,0006386 exp(1,423 V_GS) pA em V_GS ∈ [0, 4] V), declarado não
+  observável.
+- **H-OTFT-18 — Região do N3 perto do limiar.** Em V_GS ∈ [20, 50] V a lei de potência e a
+  lei quadrática quase coincidem (o PySR devolveu (V_GS − 8,99)^3,137): o melhor
+  K (V_GS − V_T)² com K e V_T livres ajusta os dados do N3 com RMSE de 0,052 década. A região
+  foi escolhida por varredura de [a, b] (V_DS ∈ [40, 50] V), maximizando esse RMSE do melhor
+  ajuste quadrático (discriminabilidade) com o erro do N3 contra o OVSED limitado a 0,15
+  década (RMSE) e 0,30 década (máximo). Trechos da varredura (discriminabilidade / RMSE vs
+  OVSED / máximo vs OVSED, em década): [20, 50] 0,052 / 0,125 / 0,216; [12, 50] 0,177 /
+  0,237 / 0,370; [10, 25] 0,171 / 0,142 / 0,506; [11, 28] 0,129 / 0,139 / 0,260; [10,5; 30]
+  0,167 / 0,153 / 0,275; escolhida [10,5; 28]: 0,155 / 0,140 / 0,256 (3,0× a região
+  anterior). Descer abaixo de ~10,5 V faz o N3 subestimar o OVSED por fator > 2 na borda
+  (q_tot ≈ θ falha); subir o limite acima de ~28 V aumenta o erro de F_sat constante. Em
+  1 − R² linear, que é o que a perda normalizada mede, a discriminabilidade quase não depende
+  da região (3,8e-3 contra 3,2e-3 em [20, 50] V): o MSE é dominado pelas correntes altas, e
+  um V_T livre acomoda a curvatura. 3,8e-3 em 1 − R² equivale a ~38 nós na perda
+  (H-OTFT-07), mas é da ordem do 1 − R² que o próprio ruído de 5 % produz (~4e-3). Já a
+  compensação expoente × limiar ((V_GS − V_x)^3,137 contra ^3,18) dá 1 − R² ~ 2e-6 em
+  qualquer região e não é resolvida pela escolha da região.
