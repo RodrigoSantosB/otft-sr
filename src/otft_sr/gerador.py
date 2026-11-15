@@ -101,6 +101,17 @@ MAX_CARACTERES_EQUACAO = 400
 MAX_CARACTERES_RESPOSTA = 20_000
 N_INICIOS_PADRAO = 8
 TOLERANCIA_EMPATE_RMSE = 6  # casas decimais (década) no critério de seleção
+#: Colunas próprias do M2, gravadas depois de ``experimento.COLUNAS_M1`` na linha do ensaio.
+COLUNAS_M2: tuple[str, ...] = (
+    "modo", "modelo", "n_candidatos", "n_iteracoes_refinamento", "n_candidatos_avaliados",
+    "n_candidatos_validos", "n_candidatos_fisicamente_validos", "taxa_validos",
+    "taxa_fisicamente_validos", "selecionado_indice", "selecionado_rodada",
+    "selecionado_fisicamente_valido", "checagens_reprovadas", "parametros_ajustados",
+    "rmse_log10_treino", "rmse_log10_validacao", "one_minus_r2_validacao", "tokens_entrada",
+    "tokens_saida", "caracteres_prompt", "caracteres_resposta", "tempo_inferencia_s",
+    "custo_api_estimado", "max_retentativas", "n_inicios_ajuste", "hash_templates",
+    "hash_datasets", "metadados_modelo",
+)
 _NOME_PARAMETRO = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
 
 # Limiares das checagens físicas (fração da corrente máxima na região, salvo indicação).
@@ -1140,5 +1151,5 @@ def executar_geracao(
         metadados_modelo=json.dumps(
             backend.model_metadata() if hasattr(backend, "model_metadata") else {}, default=str),
     )
-    ordem = [c for c in COLUNAS_M1 if c in linha]
-    return {**{c: linha[c] for c in ordem}, **{c: v for c, v in linha.items() if c not in ordem}}, candidatos
+    ordem = [c for c in (*COLUNAS_M1, *COLUNAS_M2) if c in linha]
+    return {c: linha[c] for c in ordem}, candidatos

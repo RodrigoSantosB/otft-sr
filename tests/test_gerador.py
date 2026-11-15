@@ -291,6 +291,8 @@ def test_executar_geracao_G1_com_respostas_invalidas_maliciosa_absurda_e_correta
     )
     assert fb.prompt_count == 6
     assert set(COLUNAS_M1) - {"erro", "traceback"} <= set(linha)
+    assert list(linha)[: len(COLUNAS_M1) - 2] == [c for c in COLUNAS_M1 if c not in ("erro", "traceback")]
+    assert set(linha) - set(COLUNAS_M1) == set(gerador.COLUNAS_M2)
     assert linha["modo"] == "M2" and linha["condicao"] == "G1"
     assert linha["algoritmo"] == gerador.ALGORITMO_M2
     assert linha["n_candidatos"] == 4 and linha["n_candidatos_avaliados"] == 4
