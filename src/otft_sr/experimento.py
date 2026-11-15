@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import math
+import os
 import time
 import traceback
 from pathlib import Path
@@ -35,10 +36,31 @@ from physics_llm_sr.workflows.baseline_study import ConsistencyCriteria, classif
 from otft_sr.contexto import VARIANTE_PROMPT, contexto_fisico
 from otft_sr.dados import construir_datasets
 from otft_sr.equivalencia import mesma_forma_funcional
+from otft_sr.formulacao import (
+    datasets_formulados,
+    formulacao_do_nivel,
+    nivel_formulado,
+    validar_formulacao,
+)
 from otft_sr.niveis import FEATURES, NivelEquacao
 
-REPO_PHYSICS_LLM_SR = Path("/home/rsb6/Desktop/projeto cleber /physics-llm-sr")
-CONFIG_BASE = REPO_PHYSICS_LLM_SR / "configs" / "nb01_baseline.yaml"
+#: Variável de ambiente com a raiz do repositório physics-llm-sr (Colab: clone fixado).
+VARIAVEL_REPO_PHYSICS_LLM_SR = "PHYSICS_LLM_SR_REPO_DIR"
+REPO_PHYSICS_LLM_SR_LOCAL = Path("/home/rsb6/Desktop/projeto cleber /physics-llm-sr")
+ARQUIVO_CONFIG_BASE = Path("configs") / "nb01_baseline.yaml"
+
+
+def repo_physics_llm_sr() -> Path:
+    """Raiz do physics-llm-sr: ``$PHYSICS_LLM_SR_REPO_DIR``, o checkout local validado ou a
+    raiz deduzida do pacote importado (instalação editável)."""
+    env = os.environ.get(VARIAVEL_REPO_PHYSICS_LLM_SR)
+    if env:
+        return Path(env)
+    if (REPO_PHYSICS_LLM_SR_LOCAL / ARQUIVO_CONFIG_BASE).is_file():
+        return REPO_PHYSICS_LLM_SR_LOCAL
+    import physics_llm_sr
+
+    return Path(physics_llm_sr.__file__).resolve().parents[2]
 
 ALGORITMOS_RS: tuple[str, ...] = ("pysr", "deap", "gplearn")
 CONDICOES: tuple[str, ...] = ("A", "B", "C")
@@ -62,8 +84,9 @@ CLASSE_SYMPY = "recupera estrutura (equivalência sympy)"
 #: próprias; ``erro``/``traceback`` só existem em ensaios com erro.
 COLUNAS_M1: tuple[str, ...] = (
     "nivel", "nivel_proposta", "algoritmo", "condicao", "ruido", "semente",
-    "configuracao_busca", "expressao_referencia", "n_treino", "n_teste", "tempo_s",
-    "stop_reason", "n_geracoes", "expressao", "n_nos", "one_minus_r2", "rmse_log10",
+    "configuracao_busca", "formulacao_perda", "expressao_referencia", "n_treino", "n_teste",
+    "tempo_s", "stop_reason", "n_geracoes", "expressao", "n_nos", "one_minus_r2",
+    "one_minus_r2_I_D", "rmse_log10",
     "frac_pred_nao_positiva", "tree_distance", "tree_distance_equivalent_min",
     "tree_distance_algebraic", "forma_funcional_sympy", "status", "erro", "traceback",
     "chamadas_llm", "expressoes_unicas_llm", "cache_hits_llm", "tempo_llm_s",
@@ -139,7 +162,7 @@ def construir_config(
     """Configuração a partir de ``nb01_baseline.yaml`` com os overrides do domínio OTFT."""
     if algoritmo not in ALGORITMOS_RS:
         raise ValueError(f"algoritmo de RS desconhecido: {algoritmo!r}")
-    base = yaml.safe_load(CONFIG_BASE.read_text(encoding="utf-8"))
+    base = yaml.safe_load((repo_physics_llm_sr() / ARQUIVO_CONFIG_BASE).read_text(encoding="utf-8"))
     d = copy.deepcopy(base)
     comuns: dict[str, Any] = {
         "mode": "pilot",
@@ -182,11 +205,25 @@ def rmse_log10(y: np.ndarray, yhat: np.ndarray) -> tuple[float, float]:
 def metricas_expressao(
     expr: Expr, nivel: NivelEquacao, X: np.ndarray, y_true: np.ndarray, cfg: ExperimentConfig
 ) -> dict[str, Any]:
-    """Métricas de ajuste (teste limpo) e estruturais de uma expressão."""
+    """Métricas de ajuste (teste limpo) e estruturais de uma expressão.
+
+    Com ``nivel`` na formulação ``log10`` (:func:`otft_sr.formulacao.nivel_formulado`),
+    ``y_true`` e a expressão estão em log10(I_D): ``one_minus_r2`` é medido em log10,
+    ``rmse_log10`` é o RMSE direto em década e ``one_minus_r2_I_D`` compara 10^f com I_D.
+    Na formulação linear ``one_minus_r2_I_D == one_minus_r2``.
+    """
     prot = ProtectionParams.from_config(cfg.symbolic)
     yhat = evaluate(expr, X, FEATURES, prot)
     reg = regression_metrics(y_true, yhat)
-    rl, nao_pos = rmse_log10(y_true, yhat)
+    if formulacao_do_nivel(nivel) == "log10":
+        y_true = np.asarray(y_true, float)
+        rl = float(np.sqrt(np.mean((yhat - y_true) ** 2)))
+        nao_pos = math.nan
+        with np.errstate(over="ignore", invalid="ignore"):
+            r2_I_D = regression_metrics(10.0**y_true, 10.0 ** np.clip(yhat, -300, 300))["one_minus_r2"]
+    else:
+        rl, nao_pos = rmse_log10(y_true, yhat)
+        r2_I_D = reg["one_minus_r2"]
     gt = parse_infix(nivel.expressao, FEATURES)
     eq = [parse_infix(f, FEATURES) for f in nivel.formas_equivalentes]
     est = structural_metrics(expr, gt, eq, TreeDistanceParams.from_config(cfg.symbolic))
@@ -194,6 +231,7 @@ def metricas_expressao(
         "expressao": to_infix(expr),
         "n_nos": size(expr),
         "one_minus_r2": reg["one_minus_r2"],
+        "one_minus_r2_I_D": float(r2_I_D),
         "rmse_log10": rl,
         "frac_pred_nao_positiva": nao_pos,
         **est,
@@ -214,18 +252,24 @@ def executar_condicao(
     avaliador: PhysicsEquationEvaluator | None = None,
     n_curvas: int = 20,
     n_pontos: int = 50,
+    formulacao_perda: str = "linear",
 ) -> dict[str, Any]:
     """Executa um ensaio nível x algoritmo de RS x condição x ruído x semente; devolve uma linha.
 
     ``condicao='A'`` ignora ``avaliador`` (w3 = 0, LLM nunca chamado). ``B``/``C`` exigem
-    um avaliador (ex.: :func:`otft_sr.contexto.criar_avaliador`).
+    um avaliador (ex.: :func:`otft_sr.contexto.criar_avaliador` ou
+    :func:`otft_sr.provedores_llm.criar_avaliador_m1`). ``formulacao_perda``: ``linear``
+    (artigo) ou ``log10`` (alvo log10 I_D, H-OTFT-19).
     """
+    validar_formulacao(formulacao_perda)
     if condicao not in CONDICOES:
         raise ValueError(f"condição desconhecida: {condicao!r}")
     if condicao != "A" and avaliador is None:
         raise ValueError(f"condição {condicao} exige avaliador LLM")
     cfg = construir_config(algoritmo, configuracao_busca, semente)
-    ds = construir_datasets(nivel, ruido, semente, n_curvas, n_pontos)
+    ds = datasets_formulados(
+        construir_datasets(nivel, ruido, semente, n_curvas, n_pontos), formulacao_perda)
+    nivel = nivel_formulado(nivel, formulacao_perda)
     ctx = contexto_fisico(nivel)
     objetivo = build_objective(
         cfg,
@@ -246,6 +290,7 @@ def executar_condicao(
         "configuracao_busca": (
             configuracao_busca if isinstance(configuracao_busca, str) else "definida_pelo_usuario"
         ),
+        "formulacao_perda": formulacao_perda,
         "expressao_referencia": nivel.expressao,
         "n_treino": int(ds["treino"].y_observed.size),
         "n_teste": int(ds["teste"].y_observed.size),
@@ -275,6 +320,71 @@ def executar_condicao(
     return linha
 
 
+MODELO_SEM_LLM = "nenhum"
+
+
+def executar_m1(
+    nivel: NivelEquacao,
+    algoritmo: str,
+    condicao: str,
+    ruido: float = 0.0,
+    semente: int = 0,
+    configuracao_busca: str | dict[str, Any] = "verificacao",
+    *,
+    cfg_llm: Any = None,
+    provedor: Any = None,
+    registro_uso: Any = None,
+    dir_cache: Path | None = None,
+    n_curvas: int = 20,
+    n_pontos: int = 50,
+    formulacao_perda: str = "linear",
+) -> dict[str, Any]:
+    """Ensaio M1 com qualquer provedor de ``otft_sr.provedores_llm`` (linha de ``executar_condicao``
+    + ``modo``, ``modelo``, tokens e razão tempo LLM / tempo de RS).
+
+    ``A``: sem LLM (``cfg_llm`` deve ser ``None``; ``modelo = "nenhum"``). ``B``/``C``: exige
+    ``cfg_llm`` (:class:`~otft_sr.provedores_llm.ConfiguracaoLLM`); ``provedor`` já criado é
+    reusado entre ensaios (carrega os pesos uma vez). Tokens = diferença do ``RegistroUso``
+    (``registro_uso``, o do provedor ou o global) antes e depois do ensaio; NaN se o provedor
+    não conta tokens. ``dir_cache``: diretório do cache JSONL do avaliador (``None`` = padrão
+    ``.cache/llm``).
+    """
+    from otft_sr import provedores_llm as pl
+
+    if condicao == "A":
+        if cfg_llm is not None or provedor is not None:
+            raise ValueError("condição A não usa LLM: não passe cfg_llm/provedor")
+        linha = executar_condicao(nivel, algoritmo, "A", ruido, semente, configuracao_busca,
+                                  n_curvas=n_curvas, n_pontos=n_pontos,
+                                  formulacao_perda=formulacao_perda)
+        modelo, tok_in, tok_out = MODELO_SEM_LLM, math.nan, math.nan
+    else:
+        if not isinstance(cfg_llm, pl.ConfiguracaoLLM):
+            raise ValueError(f"condição {condicao} exige cfg_llm (ConfiguracaoLLM)")
+        registro = next(r for r in (registro_uso, getattr(provedor, "registro", None),
+                                    pl.REGISTRO_USO) if r is not None)
+        antes = registro.obter(cfg_llm.rotulo)
+        avaliador = pl.criar_avaliador_m1(
+            cfg_llm, condicao, provedor=provedor, registro=registro,
+            dir_cache=pl.DIR_CACHE_LLM if dir_cache is None else Path(dir_cache))
+        linha = executar_condicao(nivel, algoritmo, condicao, ruido, semente, configuracao_busca,
+                                  avaliador=avaliador, n_curvas=n_curvas, n_pontos=n_pontos,
+                                  formulacao_perda=formulacao_perda)
+        depois = registro.obter(cfg_llm.rotulo)
+        d_in = depois.tokens_entrada - antes.tokens_entrada
+        d_out = depois.tokens_saida - antes.tokens_saida
+        tok_in, tok_out = (float(d_in), float(d_out)) if (d_in or d_out) else (math.nan, math.nan)
+        modelo = cfg_llm.rotulo
+    t_llm = float(linha.get("tempo_llm_s") or 0.0)
+    t_rs = float(linha["tempo_s"]) - t_llm
+    linha.update(
+        modo="M1", modelo=modelo, tokens_entrada=tok_in, tokens_saida=tok_out,
+        tempo_inferencia_s=t_llm,
+        razao_tempo_llm_rs=(t_llm / t_rs) if (condicao != "A" and t_rs > 0) else math.nan,
+    )
+    return linha
+
+
 def classificar_linha(linha: dict[str, Any]) -> dict[str, str]:
     """``classe_distancia`` (critério do ``physics_llm_sr``) e ``classe`` (com a equivalência
     sympy, H-OTFT-07b) de uma linha de ensaio; comum aos modos M1 e M2."""
@@ -293,13 +403,16 @@ def classificar_linha(linha: dict[str, Any]) -> dict[str, str]:
     return {"classe_distancia": classe_distancia, "classe": classe}
 
 
-def controle_positivo(nivel: NivelEquacao, semente: int = 0, algoritmo: str = "pysr") -> dict[str, Any]:
+def controle_positivo(
+    nivel: NivelEquacao, semente: int = 0, algoritmo: str = "pysr", formulacao_perda: str = "linear"
+) -> dict[str, Any]:
     """Avalia a expressão de referência pelo pipeline (objetivo + métricas) sem busca.
 
-    Esperado: 1 - R^2 ~ 0, e normalizado ~ 0 e distâncias = 0.
+    Esperado: 1 - R^2 ~ 0, e normalizado ~ 0 e distâncias = 0 (nas duas formulações).
     """
     cfg = construir_config(algoritmo, "verificacao", semente)
-    ds = construir_datasets(nivel, 0.0, semente)
+    ds = datasets_formulados(construir_datasets(nivel, 0.0, semente), formulacao_perda)
+    nivel = nivel_formulado(nivel, formulacao_perda)
     objetivo = build_objective(
         cfg, None, contexto_fisico(nivel), algoritmo, baseline=True, feature_names=FEATURES
     )
@@ -309,6 +422,7 @@ def controle_positivo(nivel: NivelEquacao, semente: int = 0, algoritmo: str = "p
     return {
         "nivel": nivel.id,
         "nivel_proposta": nivel.nivel_proposta,
+        "formulacao_perda": formulacao_perda,
         "e_normalizado": e,
         "s_normalizado": s,
         **m,

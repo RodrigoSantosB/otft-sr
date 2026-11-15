@@ -196,8 +196,15 @@ def _norm_chave(v: Any) -> str:
 
 
 def chave_ensaio(linha: Mapping[str, Any]) -> str:
-    """Chave do ensaio (``campo=valor`` de :data:`CAMPOS_CHAVE`, separados por ``|``)."""
-    return "|".join(f"{k}={_norm_chave(linha.get(k))}" for k in CAMPOS_CHAVE)
+    """Chave do ensaio (``campo=valor`` de :data:`CAMPOS_CHAVE`, separados por ``|``).
+
+    ``formulacao_perda`` só entra na chave quando é ``log10`` (H-OTFT-19): ensaios lineares
+    mantêm a chave anterior à opção e continuam retomáveis.
+    """
+    chave = "|".join(f"{k}={_norm_chave(linha.get(k))}" for k in CAMPOS_CHAVE)
+    if linha.get("formulacao_perda") == "log10":
+        chave += "|formulacao_perda=log10"
+    return chave
 
 
 def _ordenar_colunas(df: pd.DataFrame) -> pd.DataFrame:

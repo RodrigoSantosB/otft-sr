@@ -229,3 +229,32 @@ def tabela_custo_qualidade(
             "taxa_recuperacao": k / n if n else np.nan,
         })
     return pd.DataFrame(linhas)
+
+
+#: Razão tempo de LLM / tempo de RS informada como referência do artigo (Taskin et al. 2026).
+RAZAO_TEMPO_LLM_RS_ARTIGO = 0.4
+
+
+def tabela_razao_tempo_llm(
+    df: pd.DataFrame, grupos: Sequence[str] = ("nivel", "modo", "condicao", "modelo", "algoritmo")
+) -> pd.DataFrame:
+    """Razão tempo de LLM / tempo de RS (``tempo_llm_s / (tempo_s - tempo_llm_s)``) por grupo,
+    só para ensaios com LLM (``tempo_llm_s > 0``), ao lado da referência do artigo (0,4)."""
+    if not {"tempo_s", "tempo_llm_s"} <= set(df.columns):
+        return pd.DataFrame()
+    t = pd.to_numeric(df["tempo_s"], errors="coerce")
+    tl = pd.to_numeric(df["tempo_llm_s"], errors="coerce")
+    sub = _com_grupos(df.assign(_razao=tl / (t - tl))[(tl > 0) & (t - tl > 0)], grupos)
+    linhas = []
+    for chave, g in sub.groupby(list(grupos), dropna=False, sort=True):
+        chave = chave if isinstance(chave, tuple) else (chave,)
+        v = g["_razao"].to_numpy(float)
+        linhas.append({
+            **dict(zip(grupos, chave, strict=True)), "n_ensaios": len(g),
+            "tempo_llm_s_media": float(pd.to_numeric(g["tempo_llm_s"]).mean()),
+            "tempo_rs_s_media": float((pd.to_numeric(g["tempo_s"])
+                                       - pd.to_numeric(g["tempo_llm_s"])).mean()),
+            "razao_tempo_llm_rs_media": float(v.mean()),
+            "razao_artigo": RAZAO_TEMPO_LLM_RS_ARTIGO,
+        })
+    return pd.DataFrame(linhas)

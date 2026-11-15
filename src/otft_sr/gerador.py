@@ -84,6 +84,9 @@ from otft_sr.provedores_llm import (
 
 CONDICOES_GERACAO: tuple[str, ...] = ("G0", "G1", "G2")
 ALGORITMO_M2 = "llm_gerador"
+#: Valor de ``formulacao_perda`` no M2: expressão em I_D, parâmetros ajustados com resíduo em
+#: log10|I_D| (métricas de teste iguais às do M1 linear).
+FORMULACAO_M2 = "ajuste_log10"
 MODO_M2 = "M2"
 DIR_PROMPTS_GERADOR = RAIZ_PROJETO / "prompts" / "gerador"
 SECOES_PROMPT: tuple[str, ...] = (
@@ -1075,13 +1078,15 @@ def executar_geracao(
         "ruido": ruido,
         "semente": semente,
         "configuracao_busca": f"geracao_n{n_candidatos}_k{k}",
+        "formulacao_perda": FORMULACAO_M2,
         "expressao_referencia": nivel.expressao,
         "n_treino": int(ds["treino"].y_observed.size),
         "n_teste": int(ds["teste"].y_observed.size),
         "n_geracoes": k + 1,
     }
     metricas_nan = {c: math.nan for c in (
-        "expressao", "n_nos", "one_minus_r2", "rmse_log10", "frac_pred_nao_positiva",
+        "expressao", "n_nos", "one_minus_r2", "one_minus_r2_I_D", "rmse_log10",
+        "frac_pred_nao_positiva",
         "tree_distance", "tree_distance_equivalent_min", "tree_distance_algebraic",
         "forma_funcional_sympy")}
     if sel is None:

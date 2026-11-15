@@ -18,6 +18,7 @@ from physics_llm_sr.core_types import PhysicalContext
 from physics_llm_sr.llm.prompting import PromptLibrary
 from physics_llm_sr.llm.scoring import LLMEquationEvaluator
 
+from otft_sr.formulacao import formulacao_do_nivel
 from otft_sr.niveis import NivelEquacao
 from otft_sr.ovsed import RAIZ_PROJETO
 
@@ -52,17 +53,28 @@ def contexto_fisico(nivel: NivelEquacao) -> PhysicalContext:
         if r.V_DS_max_rel_V_GS is not None
         else f"V_DS in {_faixa(r.V_DS)}"
     )
-    unidade = {"uA": "microamperes", "pA": "picoamperes"}[nivel.unidades["I_D"]]
+    log10 = formulacao_do_nivel(nivel) == "log10"
+    u = nivel.unidades["I_D"].removeprefix("log10(").removesuffix(")")
+    unidade = {"uA": "microamperes", "pA": "picoamperes"}[u]
     leak = "" if r.com_leak else " The constant gate/leakage current floor has been subtracted."
+    alvo = (
+        f" The regression target is log10(I_D), with I_D in {unidade}: the candidate equation "
+        "predicts the base-10 logarithm of the drain current."
+        if log10
+        else ""
+    )
     descricao = (
         "DC electrical characterization of an organic thin-film transistor (p-type, magnitudes "
         f"used). Data are {_DESCRICAO_REGIAO[r.tipo_curva]}, with V_GS in {_faixa(r.V_GS)} and "
-        f"{limite_vds}. The drain current I_D is reported in {unidade}.{leak} Both V_GS and "
-        "V_DS are offered to the regression even if the current depends on only one of them."
+        f"{limite_vds}. The drain current I_D is reported in {unidade}.{leak}{alvo} Both V_GS "
+        "and V_DS are offered to the regression even if the current depends on only one of them."
     )
+    variaveis = dict(_DESCRICAO_VARIAVEIS)
+    if log10:
+        variaveis["I_D"] = "base-10 logarithm of the drain current magnitude, log10(I_D) (target)"
     return PhysicalContext(
         scenario=nivel.id,
-        variable_descriptions=dict(_DESCRICAO_VARIAVEIS),
+        variable_descriptions=variaveis,
         experiment_description=descricao,
         ground_truth=nivel.expressao,
         units=dict(nivel.unidades),
