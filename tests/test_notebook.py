@@ -31,7 +31,7 @@ def test_notebook_sincronizado_com_builder(tmp_path):
 
 
 @pytest.mark.lento
-def test_notebook_executa_em_verificacao(tmp_path):
+def test_notebook_executa_em_verificacao():
     """Executa o notebook (cópia em tmp) com configuração de verificação e sem LLM."""
     import re
 
@@ -41,10 +41,9 @@ def test_notebook_executa_em_verificacao(tmp_path):
     alvo = next(c for c in nb.cells if c.cell_type == "code" and "BACKEND_LLM =" in c.source)
     fonte = re.sub(r'^CONFIGURACAO_BUSCA = "[^"]*"', 'CONFIGURACAO_BUSCA = "verificacao"', alvo.source, flags=re.M)
     fonte = re.sub(r'^BACKEND_LLM = "[^"]*"', 'BACKEND_LLM = "nenhum"', fonte, flags=re.M)
-    assert "verificacao" in fonte and "nenhum" in fonte
+    assert re.search(r'^CONFIGURACAO_BUSCA = "verificacao"', fonte, flags=re.M)
+    assert re.search(r'^BACKEND_LLM = "nenhum"', fonte, flags=re.M)
     alvo.source = fonte
-    copia = tmp_path / "01_rs_otft_execucao.ipynb"
-    nbformat.write(nb, copia)
 
     cliente = NotebookClient(nb, timeout=3600, kernel_name="python3", resources={"metadata": {"path": str(NOTEBOOKS)}})
     cliente.execute()  # levanta CellExecutionError se a execução falhar
