@@ -1,0 +1,1 @@
+Your previous answer was rejected (${categoria}: ${motivo}). Answer again with ONE JSON object in the required format, respecting all constraints.

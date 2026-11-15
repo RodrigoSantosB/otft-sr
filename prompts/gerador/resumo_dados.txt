@@ -1,0 +1,6 @@
+Training data summary (${n_pontos} points from ${n_curvas} curves; validation and test data are withheld):
+${tabela_variaveis}
+Spearman rank correlation of I_D with each input: ${correlacoes}
+I_D spans ${decadas} decades (max/min).
+Sample of training points (V_GS, V_DS, I_D):
+${amostra}

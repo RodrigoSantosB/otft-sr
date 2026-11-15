@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 
 import numpy as np
@@ -143,3 +145,19 @@ def construir_datasets(
     y_obs = aplicar_ruido(y_true, sigma, rng)
     part = particionar_curvas(n_curvas, rng, fracoes)
     return {k: _subconjunto(nivel, grade, y_true, y_obs, v, k, sigma) for k, v in part.items()}
+
+
+def hash_datasets(datasets: dict[str, Dataset]) -> str:
+    """SHA-256 do conteúdo das partições (nomes, X, y_true, y_observed, ids de curva e
+    metadados), em ordem de nome; identifica o conjunto de dados de um ensaio."""
+    h = hashlib.sha256()
+    for nome in sorted(datasets):
+        d = datasets[nome]
+        h.update(nome.encode())
+        h.update(json.dumps([d.feature_names, d.target_name, d.scenario]).encode())
+        for arr in (d.X, d.y_true, d.y_observed, d.simulation_ids):
+            a = np.ascontiguousarray(np.asarray(arr, dtype=np.float64))
+            h.update(str(a.shape).encode())
+            h.update(a.tobytes())
+        h.update(json.dumps(d.metadata, sort_keys=True, default=str).encode())
+    return h.hexdigest()

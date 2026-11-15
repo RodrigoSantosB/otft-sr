@@ -57,6 +57,19 @@ PESOS_LINHA_DE_BASE: tuple[float, float, float] = _pesos(RAZAO_W2_W1, 0.0)
 CRITERIO = ConsistencyCriteria(max_one_minus_r2=1e-3, max_tree_distance=0.05)
 CLASSE_SYMPY = "recupera estrutura (equivalência sympy)"
 
+#: Esquema de colunas de uma linha de ensaio (M1, ``executar_condicao``), na ordem gravada.
+#: O modo M2 (``otft_sr.gerador.executar_geracao``) grava as mesmas colunas e acrescenta as
+#: próprias; ``erro``/``traceback`` só existem em ensaios com erro.
+COLUNAS_M1: tuple[str, ...] = (
+    "nivel", "nivel_proposta", "algoritmo", "condicao", "ruido", "semente",
+    "configuracao_busca", "expressao_referencia", "n_treino", "n_teste", "tempo_s",
+    "stop_reason", "n_geracoes", "expressao", "n_nos", "one_minus_r2", "rmse_log10",
+    "frac_pred_nao_positiva", "tree_distance", "tree_distance_equivalent_min",
+    "tree_distance_algebraic", "forma_funcional_sympy", "status", "erro", "traceback",
+    "chamadas_llm", "expressoes_unicas_llm", "cache_hits_llm", "tempo_llm_s",
+    "classe_distancia", "classe",
+)
+
 _OPS_BASE = ["add", "sub", "mul", "div", "neg", "exp", "log", "sin", "cos"]
 OPERADORES: dict[str, list[str]] = {
     "deap": [*_OPS_BASE, "pow"],
@@ -258,19 +271,26 @@ def executar_condicao(
     linha["expressoes_unicas_llm"] = cont["unique_llm"]
     linha["cache_hits_llm"] = cont["cache_hits"]
     linha["tempo_llm_s"] = cont["llm_seconds"]
-    linha["classe_distancia"] = classify(
+    linha.update(classificar_linha(linha))
+    return linha
+
+
+def classificar_linha(linha: dict[str, Any]) -> dict[str, str]:
+    """``classe_distancia`` (critério do ``physics_llm_sr``) e ``classe`` (com a equivalência
+    sympy, H-OTFT-07b) de uma linha de ensaio; comum aos modos M1 e M2."""
+    classe_distancia = classify(
         linha.get("one_minus_r2", math.nan),
         linha.get("tree_distance", math.nan),
         CRITERIO,
-        status="ok" if linha["status"] == "ok" else "error",
+        status="ok" if linha.get("status") == "ok" else "error",
         equivalent_distance=linha.get("tree_distance_equivalent_min", math.nan),
         algebraic_distance=linha.get("tree_distance_algebraic", math.nan),
     )
-    linha["classe"] = linha["classe_distancia"]
+    classe = classe_distancia
     ajusta = linha.get("one_minus_r2", math.inf) <= CRITERIO.max_one_minus_r2
-    if linha["classe"] != "recupera estrutura" and ajusta and linha.get("forma_funcional_sympy"):
-        linha["classe"] = CLASSE_SYMPY
-    return linha
+    if classe != "recupera estrutura" and ajusta and linha.get("forma_funcional_sympy"):
+        classe = CLASSE_SYMPY
+    return {"classe_distancia": classe_distancia, "classe": classe}
 
 
 def controle_positivo(nivel: NivelEquacao, semente: int = 0, algoritmo: str = "pysr") -> dict[str, Any]:
