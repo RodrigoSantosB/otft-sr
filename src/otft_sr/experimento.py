@@ -40,7 +40,7 @@ from otft_sr.niveis import FEATURES, NivelEquacao
 REPO_PHYSICS_LLM_SR = Path("/home/rsb6/Desktop/projeto cleber /physics-llm-sr")
 CONFIG_BASE = REPO_PHYSICS_LLM_SR / "configs" / "nb01_baseline.yaml"
 
-MOTORES: tuple[str, ...] = ("pysr", "deap", "gplearn")
+ALGORITMOS_RS: tuple[str, ...] = ("pysr", "deap", "gplearn")
 CONDICOES: tuple[str, ...] = ("A", "B", "C")
 MAX_NOS = 30
 RAZAO_W2_W1 = 0.003
@@ -53,7 +53,7 @@ def _pesos(r2: float, r3: float) -> tuple[float, float, float]:
 
 
 PESOS_LLM: tuple[float, float, float] = _pesos(RAZAO_W2_W1, RAZAO_W3_W1)
-PESOS_BASELINE: tuple[float, float, float] = _pesos(RAZAO_W2_W1, 0.0)
+PESOS_LINHA_DE_BASE: tuple[float, float, float] = _pesos(RAZAO_W2_W1, 0.0)
 CRITERIO = ConsistencyCriteria(max_one_minus_r2=1e-3, max_tree_distance=0.05)
 CLASSE_SYMPY = "recupera estrutura (equivalência sympy)"
 
@@ -64,10 +64,11 @@ OPERADORES: dict[str, list[str]] = {
     "pysr": ["add", "sub", "mul", "div", "pow", "neg", "exp", "log", "sin", "cos"],
 }
 
-#: Orçamentos por motor. "completo" = best_config da queda livre
-#: (physics-llm-sr/references/convergence/<motor>/free_fall/best_config.yaml).
-ORCAMENTOS: dict[str, dict[str, dict[str, Any]]] = {
-    "fumaca": {
+#: Configurações de busca por algoritmo de RS. "calibrada" = best_config da queda livre
+#: (physics-llm-sr/references/convergence/<algoritmo>/free_fall/best_config.yaml);
+#: "verificacao" = execução de verificação do pipeline (não constitui resultado).
+CONFIGURACOES_BUSCA: dict[str, dict[str, dict[str, Any]]] = {
+    "verificacao": {
         "pysr": {
             "sr.early_stopping.enabled": False,
             "sr.pysr.niterations": 2,
@@ -78,7 +79,7 @@ ORCAMENTOS: dict[str, dict[str, dict[str, Any]]] = {
         "deap": {"sr.population": 40, "sr.generations": 4, "sr.early_stopping.enabled": False},
         "gplearn": {"sr.population": 40, "sr.generations": 4, "sr.early_stopping.enabled": False},
     },
-    "completo": {
+    "calibrada": {
         "pysr": {
             "sr.early_stopping.enabled": False,
             "sr.pysr.populations": 8,
@@ -117,14 +118,14 @@ def _set(d: dict[str, Any], caminho: str, valor: Any) -> None:
 
 
 def construir_config(
-    motor: str,
-    orcamento: str | dict[str, Any] = "fumaca",
+    algoritmo: str,
+    configuracao_busca: str | dict[str, Any] = "verificacao",
     semente: int = 0,
     overrides: dict[str, Any] | None = None,
 ) -> ExperimentConfig:
-    """Config a partir de ``nb01_baseline.yaml`` com os overrides do domínio OTFT."""
-    if motor not in MOTORES:
-        raise ValueError(f"motor desconhecido: {motor!r}")
+    """Configuração a partir de ``nb01_baseline.yaml`` com os overrides do domínio OTFT."""
+    if algoritmo not in ALGORITMOS_RS:
+        raise ValueError(f"algoritmo de RS desconhecido: {algoritmo!r}")
     base = yaml.safe_load(CONFIG_BASE.read_text(encoding="utf-8"))
     d = copy.deepcopy(base)
     comuns: dict[str, Any] = {
@@ -134,7 +135,7 @@ def construir_config(
         "loss.w1": PESOS_LLM[0],
         "loss.w2": PESOS_LLM[1],
         "loss.w3": PESOS_LLM[2],
-        "loss.baseline_weights": list(PESOS_BASELINE),
+        "loss.baseline_weights": list(PESOS_LINHA_DE_BASE),
         "loss.normalization": "normalized",
         "loss.max_nodes": MAX_NOS,
         "sr.pysr.loss": "mse",
@@ -142,8 +143,12 @@ def construir_config(
         "sr.operators": copy.deepcopy(OPERADORES),
         "output_dir": "results",
     }
-    orc = ORCAMENTOS[orcamento][motor] if isinstance(orcamento, str) else orcamento
-    for k, v in {**comuns, **orc, **(overrides or {})}.items():
+    busca = (
+        CONFIGURACOES_BUSCA[configuracao_busca][algoritmo]
+        if isinstance(configuracao_busca, str)
+        else configuracao_busca
+    )
+    for k, v in {**comuns, **busca, **(overrides or {})}.items():
         _set(d, k, v)
     return parse_config(d)
 
@@ -188,16 +193,16 @@ def metricas_expressao(
 
 def executar_condicao(
     nivel: NivelEquacao,
-    motor: str,
+    algoritmo: str,
     condicao: str,
     ruido: float = 0.0,
     semente: int = 0,
-    orcamento: str | dict[str, Any] = "fumaca",
+    configuracao_busca: str | dict[str, Any] = "verificacao",
     avaliador: PhysicsEquationEvaluator | None = None,
     n_curvas: int = 20,
     n_pontos: int = 50,
 ) -> dict[str, Any]:
-    """Executa uma célula nível x motor x condição x ruído x semente; devolve uma linha.
+    """Executa um ensaio nível x algoritmo de RS x condição x ruído x semente; devolve uma linha.
 
     ``condicao='A'`` ignora ``avaliador`` (w3 = 0, LLM nunca chamado). ``B``/``C`` exigem
     um avaliador (ex.: :func:`otft_sr.contexto.criar_avaliador`).
@@ -206,32 +211,32 @@ def executar_condicao(
         raise ValueError(f"condição desconhecida: {condicao!r}")
     if condicao != "A" and avaliador is None:
         raise ValueError(f"condição {condicao} exige avaliador LLM")
-    cfg = construir_config(motor, orcamento, semente)
+    cfg = construir_config(algoritmo, configuracao_busca, semente)
     ds = construir_datasets(nivel, ruido, semente, n_curvas, n_pontos)
     ctx = contexto_fisico(nivel)
     objetivo = build_objective(
         cfg,
         avaliador,
         ctx,
-        motor,
+        algoritmo,
         baseline=(condicao == "A"),
         feature_names=FEATURES,
         prompt_variant=VARIANTE_PROMPT,
     )
     linha: dict[str, Any] = {
         "nivel": nivel.id,
-        "motor": motor,
+        "algoritmo": algoritmo,
         "condicao": condicao,
         "ruido": ruido,
         "semente": semente,
-        "orcamento": orcamento if isinstance(orcamento, str) else "personalizado",
+        "configuracao_busca": configuracao_busca if isinstance(configuracao_busca, str) else "definida pelo usuário",
         "expressao_referencia": nivel.expressao,
         "n_treino": int(ds["treino"].y_observed.size),
         "n_teste": int(ds["teste"].y_observed.size),
     }
     t0 = time.perf_counter()
     try:
-        reg = make_regressor(motor)
+        reg = make_regressor(algoritmo)
         fit = reg.fit(ds["treino"], objetivo, cfg, validation=ds["validacao"])
         linha["tempo_s"] = time.perf_counter() - t0
         linha["stop_reason"] = fit.stop_reason
@@ -240,7 +245,7 @@ def executar_condicao(
             metricas_expressao(fit.best_expression, nivel, ds["teste"].X, ds["teste"].y_true, cfg)
         )
         linha["status"] = "ok"
-    except Exception as exc:  # célula com erro é registrada, não interrompe a matriz
+    except Exception as exc:  # ensaio com erro é registrado, não interrompe o desenho experimental
         linha["tempo_s"] = time.perf_counter() - t0
         linha["status"] = "erro"
         linha["erro"] = f"{type(exc).__name__}: {exc}"
@@ -265,15 +270,15 @@ def executar_condicao(
     return linha
 
 
-def controle_positivo(nivel: NivelEquacao, semente: int = 0, motor: str = "pysr") -> dict[str, Any]:
+def controle_positivo(nivel: NivelEquacao, semente: int = 0, algoritmo: str = "pysr") -> dict[str, Any]:
     """Avalia a expressão de referência pelo pipeline (objetivo + métricas) sem busca.
 
     Esperado: 1 - R^2 ~ 0, e normalizado ~ 0 e distâncias = 0.
     """
-    cfg = construir_config(motor, "fumaca", semente)
+    cfg = construir_config(algoritmo, "verificacao", semente)
     ds = construir_datasets(nivel, 0.0, semente)
     objetivo = build_objective(
-        cfg, None, contexto_fisico(nivel), motor, baseline=True, feature_names=FEATURES
+        cfg, None, contexto_fisico(nivel), algoritmo, baseline=True, feature_names=FEATURES
     )
     expr = parse_infix(nivel.expressao, FEATURES)
     e, s = objetivo.components(expr, ds["teste"].X, ds["teste"].y_true)
