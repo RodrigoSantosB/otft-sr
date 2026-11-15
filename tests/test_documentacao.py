@@ -1,4 +1,4 @@
-"""Documentação: caminhos citados existem e premissas H-OTFT-01..15 estão íntegras."""
+"""Documentação: caminhos citados existem e premissas H-OTFT-01..16 estão íntegras."""
 
 import re
 from pathlib import Path
@@ -35,10 +35,10 @@ def test_caminhos_citados_nas_premissas_existem():
     assert ausentes == []
 
 
-def test_premissas_h_otft_01_a_15_contiguas():
+def test_premissas_h_otft_01_a_16_contiguas():
     ids = re.findall(r"^- \*\*H-OTFT-(\d{2}[a-z]?)", PREMISSAS.read_text(encoding="utf-8"), flags=re.M)
     numeros = [int(i[:2]) for i in ids]
-    assert sorted(set(numeros)) == list(range(1, 16))
+    assert sorted(set(numeros)) == list(range(1, 17))
     assert numeros == sorted(numeros)  # em ordem
     assert len(ids) == len(set(ids))  # sem duplicatas
     extras = [i for i in ids if i[2:]]

@@ -1,21 +1,24 @@
-"""Escada de equações-alvo (N1-N4) ancoradas no OVSED com parâmetros da Org1.
+"""Escada de equações-alvo (níveis N1-N4 da proposta, Seção 5.1) ancoradas no OVSED (Org1).
 
-Cada nível é um :class:`NivelEquacao` com expressão de referência em infixo (constantes
-numéricas, variáveis ``V_GS`` e ``V_DS`` em módulo, saída ``I_D`` em µA), formas
-equivalentes, gerador numpy (a própria expressão), região de polarização e descrição.
+O identificador ``N<k>`` coincide com o nível da proposta (``nivel_proposta`` = k). Cada
+nível é um :class:`NivelEquacao` com nome científico (``nome``), expressão de referência em
+infixo (constantes numéricas, variáveis ``V_GS`` e ``V_DS`` em módulo, saída ``I_D`` em µA),
+formas equivalentes, gerador numpy (a própria expressão), região de polarização e descrição.
 
 Regra de ancoragem (H-OTFT-04): as constantes de cada nível são ajustadas ao OVSED completo
-(R_S e I_leak incluídos; I_leak removido no N4) na região do nível, minimizando o erro
+(R_S e I_leak incluídos; I_leak removido em N4) na região do nível, minimizando o erro
 relativo quadrático, e arredondadas a 4 algarismos significativos. O gerador usa as
 constantes arredondadas, logo gerador == expressão de referência.
 
-- N1 saturação quadrática (controle canônico): I_D = K1 (V_GS - V_Th1)^2.
-- N2 lei de potência OVSED (acumulação forte, F_sat constante): I_D = K2 (V_GS - V_th0)^l,
-  com V_th0 e l da Org1 fixos e K2 = W J_th F_sat,ref / (n V_T)^l.
-- N3 regime linear (triodo) quadrático clássico: I_D = K3 (2 (V_GS - V_Th3) V_DS - V_DS^2),
-  válido para V_DS <= V_GS - V_Th3 (H-OTFT-05: tanh não é operador permitido).
-- N4 sublimiar exponencial: I_D = I_0 exp(ln10 V_GS / S), I_leak removido.
-- N5 (R_S implícita) fora do escopo de execução (H-OTFT-08).
+- N1 saturação quadrática ideal (controle canônico): I_D = K (V_GS - V_Th)^2.
+- N2 regime linear (triodo) com termo quadrático em V_DS:
+  I_D = K (2 (V_GS - V_Th) V_DS - V_DS^2), válido para V_DS <= V_GS - V_Th
+  (H-OTFT-05: tanh não é operador permitido).
+- N3 saturação com mobilidade em lei de potência (OVSED, acumulação forte, F_sat constante):
+  I_D = K (V_GS - V_th0)^l, com V_th0 e l da Org1 fixos e K = W J_th F_sat,ref / (n V_T)^l.
+- N4 corrente sublimiar exponencial: I_D = I_0 exp(ln10 V_GS / S), I_leak removido.
+- N5 saturação com resistência de contato (R_S implícita): fora do escopo de execução
+  (H-OTFT-08), só documentado.
 """
 
 from __future__ import annotations
@@ -67,6 +70,7 @@ class NivelEquacao:
     """Nível da escada de equações-alvo."""
 
     id: str
+    nivel_proposta: int  # 1..5 = índice do id (Seção 5.1 da proposta)
     nome: str
     expressao: str  # infixo com constantes numéricas (parse_infix)
     formas_equivalentes: tuple[str, ...]
@@ -139,7 +143,7 @@ def _ajuste_quadratico(
 # ----------------------------------------------------------------------------- níveis
 
 
-def _regiao_n1() -> RegiaoPolarizacao:
+def _regiao_saturacao_quadratica() -> RegiaoPolarizacao:
     return RegiaoPolarizacao(
         V_GS=(25.0, 50.0),
         V_DS=(40.0, 50.0),
@@ -148,15 +152,16 @@ def _regiao_n1() -> RegiaoPolarizacao:
     )
 
 
-def _nivel_n1(p: ParametrosOVSED) -> NivelEquacao:
-    r = _regiao_n1()
+def _nivel_saturacao_quadratica(p: ParametrosOVSED) -> NivelEquacao:
+    r = _regiao_saturacao_quadratica()
     V_Th, K = _ajuste_quadratico(
         p, lambda _vt: r, lambda vg, _vd, vt: (vg - vt) ** 2, np.arange(10.0, 24.0, 0.25)
     )
     K, V_Th = arred(K), arred(V_Th)
     return NivelEquacao(
         id="N1",
-        nome="Saturação quadrática (lei de Shockley, controle canônico)",
+        nivel_proposta=1,
+        nome="Saturação quadrática ideal",
         expressao=f"{K!r} * (V_GS - {V_Th!r}) ** 2",
         formas_equivalentes=(
             f"{K!r} * (V_GS - {V_Th!r}) * (V_GS - {V_Th!r})",
@@ -177,7 +182,7 @@ def _nivel_n1(p: ParametrosOVSED) -> NivelEquacao:
     )
 
 
-def _nivel_n2(p: ParametrosOVSED) -> NivelEquacao:
+def _nivel_saturacao_lei_de_potencia(p: ParametrosOVSED) -> NivelEquacao:
     r = RegiaoPolarizacao(
         V_GS=(20.0, 50.0),
         V_DS=(40.0, 50.0),
@@ -196,8 +201,9 @@ def _nivel_n2(p: ParametrosOVSED) -> NivelEquacao:
     F_ref = K * (p.n * V_T) ** p.l / (p.W * p.J_th)
     V_th0, l = p.V_th0, p.l
     return NivelEquacao(
-        id="N2",
-        nome="Lei de potência OVSED (mobilidade dependente de V_GS, F_sat constante)",
+        id="N3",
+        nivel_proposta=3,
+        nome="Saturação com mobilidade em lei de potência",
         expressao=f"{K!r} * (V_GS - {V_th0!r}) ** {l!r}",
         formas_equivalentes=(f"{K!r} * exp({l!r} * log(V_GS - {V_th0!r}))",),
         gerador=lambda vg, vd: K * np.abs(vg - V_th0) ** l + 0.0 * vd,
@@ -216,7 +222,7 @@ def _nivel_n2(p: ParametrosOVSED) -> NivelEquacao:
     )
 
 
-def _regiao_n3(V_Th: float) -> RegiaoPolarizacao:
+def _regiao_triodo_quadratico(V_Th: float) -> RegiaoPolarizacao:
     return RegiaoPolarizacao(
         V_GS=(30.0, 50.0),
         V_DS=(0.5, 50.0),
@@ -229,17 +235,18 @@ def _regiao_n3(V_Th: float) -> RegiaoPolarizacao:
     )
 
 
-def _nivel_n3(p: ParametrosOVSED) -> NivelEquacao:
+def _nivel_triodo_quadratico(p: ParametrosOVSED) -> NivelEquacao:
     V_Th, K = _ajuste_quadratico(
         p,
-        _regiao_n3,
+        _regiao_triodo_quadratico,
         lambda vg, vd, vt: 2.0 * (vg - vt) * vd - vd**2,
         np.arange(15.0, 28.0, 0.25),
     )
     K, V_Th = arred(K), arred(V_Th)
     return NivelEquacao(
-        id="N3",
-        nome="Regime linear quadrático clássico (triodo)",
+        id="N2",
+        nivel_proposta=2,
+        nome="Regime linear (triodo) com termo quadrático em V_DS",
         expressao=f"{K!r} * (2 * (V_GS - {V_Th!r}) * V_DS - V_DS ** 2)",
         formas_equivalentes=(
             f"{K!r} * (2 * (V_GS - {V_Th!r}) * V_DS - V_DS * V_DS)",
@@ -247,7 +254,7 @@ def _nivel_n3(p: ParametrosOVSED) -> NivelEquacao:
             f"{K!r} * V_DS * (2 * V_GS - {2 * V_Th!r} - V_DS)",
         ),
         gerador=lambda vg, vd: K * (2.0 * (vg - V_Th) * vd - vd**2),
-        regiao=_regiao_n3(V_Th),
+        regiao=_regiao_triodo_quadratico(V_Th),
         descricao_fisica=(
             "Nível 2 da proposta com mobilidade constante: I_D = (W/L) C_i mu "
             "[(V_GS - V_Th) V_DS - V_DS^2/2]; reproduz a expansão de tau(2 - tau) do F_sat "
@@ -262,7 +269,7 @@ def _nivel_n3(p: ParametrosOVSED) -> NivelEquacao:
     )
 
 
-def _nivel_n4(p: ParametrosOVSED) -> NivelEquacao:
+def _nivel_sublimiar_exponencial(p: ParametrosOVSED) -> NivelEquacao:
     r = RegiaoPolarizacao(
         V_GS=(0.0, 4.0),
         V_DS=(1.0, 5.0),
@@ -283,6 +290,7 @@ def _nivel_n4(p: ParametrosOVSED) -> NivelEquacao:
     S_l1 = LN10 * p.n * V_T / (p.l + 1)
     return NivelEquacao(
         id="N4",
+        nivel_proposta=4,
         nome="Corrente sublimiar exponencial",
         expressao=f"{I_0!r} * exp({c!r} * V_GS)",
         formas_equivalentes=(f"exp({c!r} * V_GS + {arred(math.log(I_0))!r})",),
@@ -305,9 +313,14 @@ def _nivel_n4(p: ParametrosOVSED) -> NivelEquacao:
 
 @cache
 def escada(V_th0: float | None = None) -> tuple[NivelEquacao, ...]:
-    """Níveis N1-N4 (cache por V_th0; ``None`` = valor adotado em ``ovsed``)."""
+    """Níveis N1-N4 da proposta, nessa ordem (cache por V_th0; ``None`` = valor em ``ovsed``)."""
     p = carregar_parametros_org1() if V_th0 is None else carregar_parametros_org1(V_th0=V_th0)
-    return (_nivel_n1(p), _nivel_n2(p), _nivel_n3(p), _nivel_n4(p))
+    return (
+        _nivel_saturacao_quadratica(p),
+        _nivel_triodo_quadratico(p),
+        _nivel_saturacao_lei_de_potencia(p),
+        _nivel_sublimiar_exponencial(p),
+    )
 
 
 def nivel(nivel_id: str) -> NivelEquacao:
@@ -315,7 +328,9 @@ def nivel(nivel_id: str) -> NivelEquacao:
     for n in escada():
         if n.id == nivel_id:
             return n
-    raise KeyError(f"nível desconhecido: {nivel_id!r} (válidos: N1-N4; N5 fora do escopo)")
+    raise KeyError(
+        f"nível desconhecido: {nivel_id!r} (válidos: {[n.id for n in escada()]}; "
+        "N5 fora do escopo)")
 
 
 def erro_vs_ovsed(n: NivelEquacao, p: ParametrosOVSED | None = None) -> dict[str, float]:
@@ -333,7 +348,7 @@ def erro_vs_ovsed(n: NivelEquacao, p: ParametrosOVSED | None = None) -> dict[str
 
 
 N5_DOCUMENTACAO = (
-    "N5 (saturação com R_S): I_D = K (V_GS - V_Th - I_D R_S)^(gamma+2) é implícita em I_D; "
+    "N5 (saturação com resistência de contato, R_S): I_D = K (V_GS - V_Th - I_D R_S)^(gamma+2) é implícita em I_D; "
     "a AST e os algoritmos de RS (DEAP, gplearn, PySR) só representam y = f(X) explícita. Fica como "
     "trabalho futuro (ex.: oferecer I_D como entrada e buscar o resíduo, ou RS sobre a "
     "inversa V_GS(I_D, V_DS)). Para a Org1, I_D R_S <= ~0,1 V (I_D < 10 µA, R_S = 10 kΩ): "
