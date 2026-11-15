@@ -229,7 +229,9 @@ def executar_condicao(
         "condicao": condicao,
         "ruido": ruido,
         "semente": semente,
-        "configuracao_busca": configuracao_busca if isinstance(configuracao_busca, str) else "definida pelo usuário",
+        "configuracao_busca": (
+            configuracao_busca if isinstance(configuracao_busca, str) else "definida_pelo_usuario"
+        ),
         "expressao_referencia": nivel.expressao,
         "n_treino": int(ds["treino"].y_observed.size),
         "n_teste": int(ds["teste"].y_observed.size),

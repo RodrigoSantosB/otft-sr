@@ -37,7 +37,10 @@ cd "/home/rsb6/Desktop/projeto cleber /otft-sr"
 `CONFIGURACAO_BUSCA = "verificacao"` verifica a integridade do pipeline e não constitui
 resultado; `"calibrada"` usa o `best_config.yaml` da queda livre de cada algoritmo de RS.
 Os testes de execução completa do notebook têm o marcador `lento`
-(`"$PY" -m pytest -m lento`) e ficam fora da suíte padrão.
+(`"$PY" -m pytest -m lento`) e ficam fora da suíte padrão. O `.ipynb` versionado não
+guarda saídas: é sempre regenerado pelo builder; resultados executados vão para `results/`.
+As colunas exportadas são `algoritmo` e `configuracao_busca` (CSV anteriores à renomeação
+usam outros nomes e não são lidos pelo notebook atual).
 
 ## Estrutura
 
