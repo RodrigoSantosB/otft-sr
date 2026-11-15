@@ -44,17 +44,17 @@ Premissas: `references/premissas_cientificas.md` (H-OTFT-01…15).
 
 code(r"""
 # ---- PARÂMETROS EDITÁVEIS -------------------------------------------------------------
-ORCAMENTO = "fumaca"            # "fumaca" (teste de encadeamento) | "completo" (best_config)
+CONFIGURACAO_BUSCA = "verificacao"  # "verificacao" (integridade do pipeline) | "calibrada" (best_config)
 NIVEIS = ["N1", "N2", "N3", "N4"]
-MOTORES = ["pysr", "deap", "gplearn"]
+ALGORITMOS_RS = ["pysr", "deap", "gplearn"]
 CONDICOES = ["A", "B", "C"]
 RUIDOS = [0.0]                  # proposta §4.5: [0.0, 0.01, 0.05, 0.10]
 SEMENTES = [0]
 N_CURVAS, N_PONTOS = 20, 50     # curvas por nível, pontos por curva
 BACKEND_LLM = "ollama"          # "nenhum" | "ollama" (mistral:7b-instruct, temperatura 0)
-# Células B/C (LLM no laço): subconjunto da matriz; em fumaça, orçamento mínimo de DEAP.
-NIVEIS_LLM, MOTORES_LLM = ["N2"], ["deap"]
-ORCAMENTO_LLM_FUMACA = {"sr.population": 8, "sr.generations": 1, "sr.early_stopping.enabled": False}
+# Ensaios B/C (LLM no laço): subconjunto do desenho experimental; em verificação, DEAP mínimo.
+NIVEIS_LLM, ALGORITMOS_RS_LLM = ["N2"], ["deap"]
+CONFIGURACAO_BUSCA_LLM_VERIFICACAO = {"sr.population": 8, "sr.generations": 1, "sr.early_stopping.enabled": False}
 # ---------------------------------------------------------------------------------------
 """)
 
@@ -73,16 +73,16 @@ warnings.filterwarnings("ignore")
 from otft_sr import ovsed
 from otft_sr.contexto import contexto_fisico, criar_avaliador, ollama_disponivel
 from otft_sr.dados import construir_datasets
-from otft_sr.experimento import CRITERIO, PESOS_BASELINE, PESOS_LLM, controle_positivo, executar_condicao
+from otft_sr.experimento import CRITERIO, PESOS_LINHA_DE_BASE, PESOS_LLM, controle_positivo, executar_condicao
 from otft_sr.niveis import N5_DOCUMENTACAO, erro_vs_ovsed, escada, nivel
 
-FUMACA = ORCAMENTO == "fumaca"
+EXECUCAO_DE_VERIFICACAO = CONFIGURACAO_BUSCA == "verificacao"
 DIR_RESULTADOS = RAIZ / "results"
 DIR_RESULTADOS.mkdir(exist_ok=True)
 print(f"python: {sys.executable}")
-print(f"orçamento: {ORCAMENTO}; pesos A = {tuple(round(w, 3) for w in PESOS_BASELINE)}, B/C = {PESOS_LLM}")
-if FUMACA:
-    print("ATENÇÃO: execução de FUMAÇA — valida o encadeamento; os números NÃO são resultados.")
+print(f"configuração de busca: {CONFIGURACAO_BUSCA}; pesos A = {tuple(round(w, 3) for w in PESOS_LINHA_DE_BASE)}, B/C = {PESOS_LLM}")
+if EXECUCAO_DE_VERIFICACAO:
+    print("EXECUÇÃO DE VERIFICAÇÃO — valida a integridade do pipeline; não constitui resultado.")
 """)
 
 # ============================================================================ 1
@@ -210,13 +210,13 @@ code(r"""
 resultados = []
 if "A" in CONDICOES:
     for nid in NIVEIS:
-        for motor in MOTORES:
+        for algoritmo in ALGORITMOS_RS:
             for sigma in RUIDOS:
                 for sem in SEMENTES:
-                    r = executar_condicao(nivel(nid), motor, "A", sigma, sem, ORCAMENTO,
+                    r = executar_condicao(nivel(nid), algoritmo, "A", sigma, sem, CONFIGURACAO_BUSCA,
                                           n_curvas=N_CURVAS, n_pontos=N_PONTOS)
                     resultados.append(r)
-                    print(f"A {nid} {motor:7s} σ={sigma:<4} s={sem} [{r['status']}] "
+                    print(f"A {nid} {algoritmo:7s} σ={sigma:<4} s={sem} [{r['status']}] "
                           f"{r.get('expressao', r.get('erro'))!s:.70} | 1-R²={r.get('one_minus_r2', float('nan')):.2e} "
                           f"| {r['classe']} | {r['tempo_s']:.1f}s")
 """)
@@ -241,18 +241,20 @@ elif not ollama_disponivel():
 if motivo:
     print(f"Condições B/C PULADAS: {motivo}.")
 else:
-    orc_llm = ORCAMENTO_LLM_FUMACA if FUMACA else ORCAMENTO
+    busca_llm = (
+        CONFIGURACAO_BUSCA_LLM_VERIFICACAO if EXECUCAO_DE_VERIFICACAO else CONFIGURACAO_BUSCA
+    )
     for cond in condicoes_llm:
         avaliador = criar_avaliador(cond)
         for nid in NIVEIS_LLM:
-            for motor in MOTORES_LLM:
+            for algoritmo in ALGORITMOS_RS_LLM:
                 for sigma in RUIDOS:
                     for sem in SEMENTES:
-                        r = executar_condicao(nivel(nid), motor, cond, sigma, sem, orc_llm,
+                        r = executar_condicao(nivel(nid), algoritmo, cond, sigma, sem, busca_llm,
                                               avaliador=avaliador, n_curvas=N_CURVAS, n_pontos=N_PONTOS)
-                        r["orcamento"] = "fumaca" if FUMACA else r["orcamento"]
+                        r["configuracao_busca"] = "verificacao" if EXECUCAO_DE_VERIFICACAO else r["configuracao_busca"]
                         resultados.append(r)
-                        print(f"{cond} {nid} {motor:7s} σ={sigma:<4} s={sem} [{r['status']}] "
+                        print(f"{cond} {nid} {algoritmo:7s} σ={sigma:<4} s={sem} [{r['status']}] "
                               f"{r.get('expressao', r.get('erro'))!s:.60} | 1-R²={r.get('one_minus_r2', float('nan')):.2e} "
                               f"| chamadas LLM={r['chamadas_llm']} ({r['tempo_llm_s']:.0f}s) | {r['tempo_s']:.1f}s")
 """)
@@ -268,16 +270,16 @@ por manipulação simbólica (sympy, H-OTFT-07b).
 
 code(r"""
 df = pd.DataFrame(resultados)
-if FUMACA:
-    print("FUMAÇA — tabela apenas demonstra o formato; NÃO é resultado.")
-cols = ["nivel", "motor", "condicao", "ruido", "semente", "status", "expressao", "n_nos",
+if EXECUCAO_DE_VERIFICACAO:
+    print("EXECUÇÃO DE VERIFICAÇÃO — a tabela demonstra apenas o formato; não constitui resultado.")
+cols = ["nivel", "algoritmo", "condicao", "ruido", "semente", "status", "expressao", "n_nos",
         "one_minus_r2", "rmse_log10", "tree_distance", "tree_distance_algebraic",
         "forma_funcional_sympy", "classe",
         "tempo_s", "chamadas_llm", "tempo_llm_s"]
 display(df.reindex(columns=cols))
 if len(df):
     ok = df[df["status"] == "ok"]
-    resumo = ok.groupby(["nivel", "motor", "condicao"]).agg(
+    resumo = ok.groupby(["nivel", "algoritmo", "condicao"]).agg(
         recupera=("classe", lambda s: float(np.mean(s.str.startswith("recupera estrutura")))),
         one_minus_r2_mediana=("one_minus_r2", "median"),
         rmse_log10_mediana=("rmse_log10", "median"),
@@ -295,15 +297,15 @@ if len(df) and (df["status"] == "ok").any():
     fig, ax = plt.subplots(figsize=(6.5, 4.5))
     marcadores = {"pysr": "o", "deap": "s", "gplearn": "^"}
     cores = {"A": "C0", "B": "C1", "C": "C2"}
-    for (motor, cond), g in ok.groupby(["motor", "condicao"]):
-        ax.scatter(g["n_nos"], np.maximum(g["one_minus_r2"], 1e-16), marker=marcadores[motor],
-                   color=cores[cond], label=f"{motor} / {cond}", alpha=0.8)
+    for (algoritmo, cond), g in ok.groupby(["algoritmo", "condicao"]):
+        ax.scatter(g["n_nos"], np.maximum(g["one_minus_r2"], 1e-16), marker=marcadores[algoritmo],
+                   color=cores[cond], label=f"{algoritmo} / {cond}", alpha=0.8)
     for nid in sorted(ok["nivel"].unique()):
         ax.axvline(cp.loc[nid, "n_nos"], color="grey", lw=0.5, ls=":")
     ax.set(xscale="linear", yscale="log", xlabel="complexidade (nós)", ylabel="1 − R² (teste)",
-           title="Erro × complexidade" + (" — FUMAÇA" if FUMACA else ""))
+           title="Erro × complexidade" + (" — EXECUÇÃO DE VERIFICAÇÃO" if EXECUCAO_DE_VERIFICACAO else ""))
     ax.legend(fontsize=7); fig.tight_layout()
-    fig.savefig(DIR_RESULTADOS / f"fig_pareto_{ORCAMENTO}.png", dpi=150); plt.show()
+    fig.savefig(DIR_RESULTADOS / f"fig_pareto_{CONFIGURACAO_BUSCA}.png", dpi=150); plt.show()
 """)
 
 # ============================================================================ 7
@@ -312,10 +314,11 @@ md(r"""
 """)
 
 code(r"""
-carimbo = time.strftime("%Y%m%d-%H%M%S")
-base = DIR_RESULTADOS / f"rs_otft_{ORCAMENTO}_{carimbo}"
+marca_temporal = time.strftime("%Y%m%d-%H%M%S")
+base = DIR_RESULTADOS / f"rs_otft_{CONFIGURACAO_BUSCA}_{marca_temporal}"
 df.to_csv(base.with_suffix(".csv"), index=False)
-meta = {"orcamento": ORCAMENTO, "fumaca": FUMACA, "niveis": NIVEIS, "motores": MOTORES,
+meta = {"configuracao_busca": CONFIGURACAO_BUSCA, "execucao_de_verificacao": EXECUCAO_DE_VERIFICACAO,
+        "niveis": NIVEIS, "algoritmos_rs": ALGORITMOS_RS,
         "condicoes": CONDICOES, "ruidos": RUIDOS, "sementes": SEMENTES, "backend_llm": BACKEND_LLM,
         "criterio": {"max_one_minus_r2": CRITERIO.max_one_minus_r2,
                      "max_tree_distance": CRITERIO.max_tree_distance},
@@ -328,7 +331,7 @@ print("exportado:", base.with_suffix(".csv").name, base.with_suffix(".json").nam
 
 
 def construir() -> nbf.NotebookNode:
-    """Monta o notebook a partir das células declaradas acima."""
+    """Monta o notebook a partir da lista ``celulas`` declarada acima."""
     nb = nbf.v4.new_notebook()
     nb.metadata["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}
     nb.cells = [

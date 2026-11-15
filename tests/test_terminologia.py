@@ -64,8 +64,6 @@ ALVOS = [
 
 # Alvos ainda não migrados: removidos quando a onda correspondente migrar o arquivo.
 PENDENTES = {
-    "notebooks/build_01_rs_otft.py": "O5",
-    "notebooks/01_rs_otft.ipynb": "O5",
     "README.md": "O6",
     "references/premissas_cientificas.md": "O6",
 }
