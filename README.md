@@ -25,7 +25,7 @@ PY="/home/rsb6/Desktop/projeto cleber /physics-llm-sr/.venv/bin/python"
 
 LLM opcional: Ollama local com `mistral:7b-instruct` (`curl -s localhost:11434/api/tags`).
 
-## Como rodar
+## Execução
 
 ```bash
 cd "/home/rsb6/Desktop/projeto cleber /otft-sr"
@@ -34,8 +34,10 @@ cd "/home/rsb6/Desktop/projeto cleber /otft-sr"
 # abrir o notebook com o kernel do venv; editar só o bloco de parâmetros da seção 0
 ```
 
-`ORCAMENTO = "fumaca"` só testa o encadeamento (nunca é resultado); `"completo"` usa o
-`best_config.yaml` da queda livre de cada motor.
+`CONFIGURACAO_BUSCA = "verificacao"` verifica a integridade do pipeline e não constitui
+resultado; `"calibrada"` usa o `best_config.yaml` da queda livre de cada algoritmo de RS.
+Os testes de execução completa do notebook têm o marcador `lento`
+(`"$PY" -m pytest -m lento`) e ficam fora da suíte padrão.
 
 ## Estrutura
 
@@ -44,12 +46,12 @@ src/otft_sr/ovsed.py         OVSED completo (R_S por ponto fixo), forma fechada,
 src/otft_sr/niveis.py        escada N1-N4 (dataclass NivelEquacao) e erro vs OVSED
 src/otft_sr/dados.py         grade por curvas, ruído multiplicativo, partição por curva -> Dataset
 src/otft_sr/contexto.py      PhysicalContext por nível, bibliotecas de prompts, avaliador Ollama
-src/otft_sr/experimento.py   config (nb01_baseline.yaml + overrides), executar_condicao, controle positivo
+src/otft_sr/experimento.py   configurações de busca (nb01_baseline.yaml + overrides), executar_condicao, controle positivo
 prompts/generico/            prompt do artigo (cópia de physics-llm-sr/prompts)
 prompts/dispositivo/         prompt de física de OTFT (critérios da proposta §5.2)
 data/org1/                   curvas medidas e parâmetros da Org1 (cópia de Model_OTFT)
 references/premissas_cientificas.md   premissas H-OTFT-01...
 notebooks/build_01_rs_otft.py        gerador do notebook 01_rs_otft.ipynb
-tests/                       pytest
+tests/                       pytest (inclui varredura de terminologia)
 results/                     CSV/JSON/figuras exportados pelo notebook
 ```

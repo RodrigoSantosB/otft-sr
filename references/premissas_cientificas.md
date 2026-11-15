@@ -43,7 +43,7 @@ gerados por `src/otft_sr/niveis.py` (constantes arredondadas a 4 algarismos sign
   1 − R² ≤ 1e-3. Motivo: o PySR devolveu log(1,00064^(4,15^V_GS)), idêntico a
   I_0 exp(1,423 V_GS), com distância algébrica 1.
 - **H-OTFT-08 — N5 fora do escopo de execução.** I_D = K (V_GS − V_Th − I_D R_C)^(γ+2) é
-  implícita; os motores só buscam y = f(X) explícita. Para a Org1, I_D R_S ≤ ~0,1 V
+  implícita; os algoritmos de RS só buscam y = f(X) explícita. Para a Org1, I_D R_S ≤ ~0,1 V
   (I_D < 10 µA, R_S = 10 kΩ), efeito < 1 % na faixa medida. Trabalho futuro: RS sobre a
   inversa V_GS(I_D, V_DS) ou com I_D como entrada.
 - **H-OTFT-09 — Contexto igual em B e C.** As condições B e C usam o mesmo PhysicalContext
@@ -66,6 +66,6 @@ gerados por `src/otft_sr/niveis.py` (constantes arredondadas a 4 algarismos sign
   saturação é maior que l.
 - **H-OTFT-14 — V_DS como variável distratora.** Todos os níveis recebem (V_GS, V_DS); em N1,
   N2 e N4 a corrente não depende de V_DS.
-- **H-OTFT-15 — Orçamento.** "completo" = `best_config.yaml` da queda livre por motor
-  (PySR 8×50, 200 ciclos, 20 iterações; DEAP 500×200; gplearn 1000×100); "fumaca" só testa o
-  encadeamento e nunca é resultado.
+- **H-OTFT-15 — Configuração de busca.** "calibrada" = `best_config.yaml` da queda livre por
+  algoritmo de RS (PySR 8×50, 200 ciclos, 20 iterações; DEAP 500×200; gplearn 1000×100);
+  "verificacao" = verificação de integridade do pipeline, não constitui resultado.

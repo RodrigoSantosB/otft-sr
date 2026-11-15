@@ -64,8 +64,6 @@ ALVOS = [
 
 # Alvos ainda não migrados: removidos quando a onda correspondente migrar o arquivo.
 PENDENTES = {
-    "README.md": "O6",
-    "references/premissas_cientificas.md": "O6",
 }
 
 
