@@ -120,3 +120,31 @@ gerados por `src/otft_sr/niveis.py` (constantes arredondadas a 4 algarismos sign
   (H-OTFT-07), mas é da ordem do 1 − R² que o próprio ruído de 5 % produz (~4e-3). Já a
   compensação expoente × limiar ((V_GS − V_x)^3,137 contra ^3,18) dá 1 − R² ~ 2e-6 em
   qualquer região e não é resolvida pela escolha da região.
+- **H-OTFT-19 — Formulação da perda do M1 em log10 (opção; padrão "linear").** Com
+  `formulacao_perda = "log10"` (`src/otft_sr/formulacao.py`) o alvo da RS passa a ser
+  log10(I_D) e e = MSE/Var(log10 I_D); nada muda no `physics_llm_sr`. A referência é
+  log10 da expressão do nível, escrita com `log` natural e expandida por sympy (`expand_log`
+  com `force=True`, válido na região, onde as bases são positivas): N1
+  −2,081 + 0,8686 log(V_GS − 20,24); N3 −4,658 + 1,381 log(V_GS − 8,57); N2 e N4 ficam
+  0,4343 log(...) do polinômio/da soma. A expansão é obrigatória: o `log` protegido vale 0
+  para |x| < 1e-3 (GAP-06) e o I_D do N3 desce a ~2e-4 µA. O ruído multiplicativo é aplicado
+  em I_D antes do log (mesmos dados da formulação linear; valores ≤ 0 recebem piso de 1e-6 do
+  menor positivo). Métricas: `one_minus_r2` no alvo da formulação (é o que o critério de
+  recuperação usa), `rmse_log10` direto em década (comparável entre formulações) e
+  `one_minus_r2_I_D` com 10^f contra I_D. O contexto enviado ao LLM declara que a equação
+  prevê log10(I_D). Ensaios log10 têm chave de retomada própria; os lineares mantêm a chave
+  anterior. Limite: em log10 o limiar 1 − R² ≤ 1e-3 tem outra severidade e as distâncias de
+  árvore são medidas contra a forma expandida; resultados das duas formulações não entram na
+  mesma comparação pareada.
+- **H-OTFT-20 — Decisões do modo M2 (gerador; exploratório), fixadas antes de qualquer
+  execução real.** Interpretação: primeiro objeto JSON da resposta, schema pydantic
+  (`equation`, `variables`, `parameters`), `parse_infix` com whitelist de AST (sem
+  eval/exec/sympify), operações do PySR no M1, no máximo 30 nós, profundidade 8 e 6
+  parâmetros, até `max_retentativas` novas tentativas com o motivo da recusa. Ajuste:
+  `least_squares` (TRF) no treino com resíduo em log10|I_D| (proposta §4.4), 8 inícios
+  determinísticos. Checagens físicas no treino e na grade da região (positividade,
+  monotonia em V_GS, limiar, saturação; dimensional só informativa). Seleção só pela
+  validação (fisicamente válido, menor RMSE de log10 I_D com empate a 1e-6 década, menos
+  nós); teste só do selecionado, com as métricas do M1 (`formulacao_perda = "ajuste_log10"`
+  nas linhas do M2). G0 e G1 avaliam `n_candidatos`; G2 avalia `n_candidatos × (1 + k)`, por
+  isso G1 × G2 é comparação exploratória (esforço diferente) e G0 × G1 é equivalente.
