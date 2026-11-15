@@ -16,7 +16,7 @@ from physics_llm_sr.symbolic.expression import evaluate, parse_infix
 from otft_sr.contexto import DIR_PROMPTS, VARIANTE_PROMPT, carregar_biblioteca, contexto_fisico
 from otft_sr.dados import NIVEIS_RUIDO, aplicar_ruido, construir_datasets
 from otft_sr.experimento import (
-    MOTORES,
+    ALGORITMOS_RS,
     PESOS_LLM,
     construir_config,
     controle_positivo,
@@ -153,10 +153,10 @@ def test_condicao_com_llm_exige_avaliador():
         executar_condicao(NIVEIS[0], "deap", "C")
 
 
-@pytest.mark.parametrize("motor", MOTORES)
-def test_config_valida_por_motor(motor):
-    for orc in ("fumaca", "completo"):
-        cfg = construir_config(motor, orc)
+@pytest.mark.parametrize("algoritmo", ALGORITMOS_RS)
+def test_config_valida_por_algoritmo(algoritmo):
+    for configuracao_busca in ("verificacao", "calibrada"):
+        cfg = construir_config(algoritmo, configuracao_busca)
         assert cfg.loss.normalization == "normalized"
         assert cfg.loss.max_nodes == 30
 
