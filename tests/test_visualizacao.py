@@ -80,3 +80,15 @@ def test_figuras_de_resumo():
     cand = pd.DataFrame({"chave_ensaio": ["nivel=N3|condicao=G2"] * 4, "linhagem": [0, 0, 1, 1],
                          "rodada": [0, 1, 0, 1], "rmse_log10_validacao": [0.5, 0.2, 0.4, 0.4]})
     assert len(vz.figura_evolucao_refinamento(cand).data) == 2
+
+
+@pytest.mark.parametrize("ids", [("N3",), ("N1", "N2", "N3", "N4")])
+def test_figura_contexto_fisico_ocupa_a_largura_disponivel(ids):
+    """Com um único nível a largura fixa (380 px por painel) encolhia a figura e cortava o
+    título; a figura deve se ajustar à largura da área de saída e manter a legenda fora dos painéis."""
+    from otft_sr.visualizacao import figura_contexto_fisico
+
+    lay = figura_contexto_fisico(ids).layout
+    assert lay.width is None and lay.autosize is not False
+    assert lay.legend.orientation == "h"
+    assert lay.height >= 420
