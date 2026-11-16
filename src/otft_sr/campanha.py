@@ -280,7 +280,23 @@ def plano_de_ensaios(cfg: ConfiguracaoExperimento) -> pd.DataFrame:
 CAMPOS_COMPATIBILIDADE: tuple[str, ...] = (
     "condicoes_m1", "condicoes_m2", "configuracao_busca", "configuracao_busca_llm",
     "n_curvas", "n_pontos", "n_candidatos", "n_iteracoes_refinamento", "formulacao_perda",
-    "execucao_de_verificacao")
+    "execucao_de_verificacao", "modelos")
+#: Campos de cada modelo que definem a sua identidade experimental (pesos e decodificação).
+CAMPOS_IDENTIDADE_MODELO: tuple[str, ...] = (
+    "provedor", "modelo", "revisao", "quantizacao", "dtype", "temperatura", "max_novos_tokens",
+    "semente")
+
+
+def _modelos_incompativeis(anteriores: Sequence[Mapping[str, Any]],
+                           atuais: Sequence[Mapping[str, Any]]) -> list[str]:
+    """``provedor/modelo`` presentes nas duas configurações com identidade diferente
+    (revisão, quantização, dtype ou decodificação). Acrescentar ou retirar modelos é
+    compatível: as chaves dos outros modelos não colidem."""
+    def por_nome(ms: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+        return {f"{m.get('provedor')}/{m.get('modelo')}":
+                {k: m.get(k) for k in CAMPOS_IDENTIDADE_MODELO} for m in ms}
+    a, b = por_nome(anteriores), por_nome(atuais)
+    return sorted(n for n in a.keys() & b.keys() if a[n] != b[n])
 
 
 def abrir_registro(raiz: Path | str, cfg: ConfiguracaoExperimento,
@@ -293,7 +309,12 @@ def abrir_registro(raiz: Path | str, cfg: ConfiguracaoExperimento,
     arq = destino / "config.json"
     if arq.is_file():
         anterior = json.loads(arq.read_text("utf-8")).get("config", {}).get("experimento", {})
-        dif = [k for k in CAMPOS_COMPATIBILIDADE if k in anterior and anterior[k] != atual[k]]
+        dif = [k for k in CAMPOS_COMPATIBILIDADE if k != "modelos" and k in anterior
+               and anterior[k] != atual[k]]
+        trocados = _modelos_incompativeis(anterior.get("modelos", []), atual["modelos"])
+        if trocados:
+            dif.append(f"modelos ({', '.join(trocados)}: revisão, quantização, dtype ou "
+                       "decodificação)")
         if dif:
             raise ValueError(
                 f"{destino} já existe com configuração diferente em {dif}; use outro "

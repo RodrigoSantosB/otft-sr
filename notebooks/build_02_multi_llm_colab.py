@@ -288,7 +288,7 @@ ROTULO_BUSCA = "verificacao" if CFG.execucao_de_verificacao else (
     CFG.configuracao_busca if isinstance(CFG.configuracao_busca, str) else "definida_pelo_usuario")
 ROTULO_BUSCA_LLM = "verificacao" if CFG.execucao_de_verificacao else (
     CFG.busca_llm_efetiva if isinstance(CFG.busca_llm_efetiva, str) else "definida_pelo_usuario")
-REG_USO = RegistroUso()  # chamadas, tokens e tempo por provedor/modelo
+REG_USO = RegistroUso()  # chamadas, tokens e tempo por modelo (identidade completa)
 DIR_RESULTADOS = Path(os.environ.get("OTFT_SR_DIR_RESULTADOS", RAIZ / "results"))
 DIR_CACHE_LLM = Path(os.environ.get("OTFT_SR_DIR_CACHE_LLM", RAIZ / ".cache" / "llm"))
 DRIVE_RESULTADOS = DIR_COPIA_DRIVE / "results" / CFG.id_experimento if DIR_COPIA_DRIVE else None
@@ -326,7 +326,7 @@ def mostrar_figura(nome: str, construtor, *args, **kwargs) -> None:
 
 PLANO = campanha.plano_de_ensaios(CFG)
 print(f"experimento: {CFG.id_experimento} -> {REGISTRO.diretorio}")
-print(f"modelos: {[m.rotulo + (f' [{m.quantizacao}]' if m.quantizacao else '') for m in CFG.modelos]}")
+print(f"modelos (provedor/modelo@revisão[quantização]): {[m.rotulo for m in CFG.modelos]}")
 print(f"formulação da perda (M1): {CFG.formulacao_perda}; configuração de busca: {ROTULO_BUSCA} / LLM: {ROTULO_BUSCA_LLM}")
 concluidos = PLANO.drop(columns="etapa").apply(lambda r: REGISTRO.concluido(r.to_dict()), axis=1)
 display(PLANO.assign(concluido=concluidos).groupby("etapa")["concluido"].agg(ensaios="size", concluidos="sum"))

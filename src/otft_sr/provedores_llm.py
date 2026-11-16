@@ -199,8 +199,18 @@ class ConfiguracaoLLM:
 
     @property
     def rotulo(self) -> str:
-        """``provedor/modelo`` (chave do registro de uso)."""
-        return f"{self.provedor}/{self.modelo}"
+        """Identidade do modelo: ``provedor/modelo[@revisao12][[quantizacao]]``.
+
+        É a coluna ``modelo`` dos ensaios, entra na chave de retomada e no registro de uso:
+        a mesma revisão com outra quantização (ou outra revisão) é outro modelo. Sem revisão
+        nem quantização (APIs, Ollama, simulado) fica ``provedor/modelo``.
+        """
+        r = f"{self.provedor}/{self.modelo}"
+        if self.revisao:
+            r += f"@{self.revisao[:12]}"
+        if self.quantizacao:
+            r += f"[{self.quantizacao}]"
+        return r
 
     @property
     def rotulo_arquivo(self) -> str:
@@ -424,6 +434,7 @@ def _metadados_padrao(cfg: ConfiguracaoLLM, quantizacao: str | None) -> dict[str
         "modelo": cfg.modelo,
         "revisao": cfg.revisao,
         "quantizacao": quantizacao,
+        "dtype": cfg.dtype if cfg.provedor == "huggingface" else None,
         "parametros_geracao": cfg.parametros_geracao(),
         "determinismo": cfg.determinismo,
     }

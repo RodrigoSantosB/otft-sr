@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pandas as pd
@@ -10,7 +11,7 @@ import pytest
 from otft_sr import campanha as cp
 from otft_sr.campanha import ConfiguracaoExperimento
 from otft_sr.niveis import nivel
-from otft_sr.persistencia import chave_ensaio
+from otft_sr.persistencia import RegistroExperimento, chave_ensaio
 
 
 def _cfg(**kw):
@@ -142,3 +143,37 @@ def test_conclusoes_a_partir_das_tabelas():
                           "tipo": "equivalente"}])
     texto = cp.texto_conclusoes(taxa, aud, comp, _cfg())
     assert "2/3" in texto and "NÃO discrimina" in texto and "A vs C" in texto
+
+
+# --------------------------------------------------- identidade do modelo na retomada
+
+
+def _hf(quant):
+    return dataclasses.replace(cp.QWEN25_3B, quantizacao=quant)
+
+
+def test_chave_do_ensaio_distingue_quantizacao(tmp_path):
+    """Retomar com outra quantização não reaproveita ensaios gravados com a anterior."""
+    kw = dict(modos=("M1", "M2"), niveis=("N3",), sementes=(0,), n_parametros_b=cp.N_PARAMETROS_B)
+    p4 = cp.plano_de_ensaios(_cfg(modelos=(_hf("4bit"),), **kw))
+    p8 = cp.plano_de_ensaios(_cfg(modelos=(_hf("8bit"),), **kw))
+    llm4 = p4[p4["etapa"] != "M1 linha de base"].drop(columns="etapa")
+    llm8 = p8[p8["etapa"] != "M1 linha de base"].drop(columns="etapa")
+    k4 = {chave_ensaio(r) for r in llm4.to_dict("records")}
+    k8 = {chave_ensaio(r) for r in llm8.to_dict("records")}
+    assert k4 and not (k4 & k8)
+    reg = RegistroExperimento(tmp_path, id_experimento="x")
+    for r in llm4.to_dict("records"):
+        reg.registrar({**r, "status": "ok"})
+    assert all(reg.concluido(r) for r in llm4.to_dict("records"))
+    assert not any(reg.concluido(r) for r in llm8.to_dict("records"))
+
+
+def test_retomada_com_quantizacao_diferente_acusa_incompatibilidade(tmp_path):
+    cfg = _cfg(modelos=(_hf("4bit"),))
+    cp.abrir_registro(tmp_path, cfg)
+    cp.abrir_registro(tmp_path, cfg)  # mesma identidade: retoma
+    with pytest.raises(ValueError, match="modelos"):
+        cp.abrir_registro(tmp_path, _cfg(modelos=(_hf("8bit"),)))
+    with pytest.raises(ValueError, match="modelos"):
+        cp.abrir_registro(tmp_path, _cfg(modelos=(dataclasses.replace(_hf("4bit"), revisao="b" * 40),)))

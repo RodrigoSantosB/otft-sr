@@ -98,6 +98,10 @@ def test_executar_m1_com_provedor_reusado(tmp_path, formulacao):
         assert linha["formulacao_perda"] == formulacao
         assert linha["chamadas_llm"] > 0
         assert math.isfinite(linha["razao_tempo_llm_rs"])
+        meta = json.loads(linha["metadados_modelo"])
+        assert {"provedor", "modelo", "revisao", "quantizacao", "dtype", "parametros_geracao",
+                "determinismo"} <= set(meta)
+        assert meta["provedor"] == "fake" and meta["determinismo"] == "deterministico"
     assert reg.obter("fake/simulado").chamadas > 0
     assert any(tmp_path.glob("avaliacoes_B__*.jsonl"))
 

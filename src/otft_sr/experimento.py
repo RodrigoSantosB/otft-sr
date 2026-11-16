@@ -12,6 +12,7 @@ razão w2/w1.
 from __future__ import annotations
 
 import copy
+import json
 import math
 import os
 import time
@@ -357,7 +358,7 @@ def executar_m1(
         linha = executar_condicao(nivel, algoritmo, "A", ruido, semente, configuracao_busca,
                                   n_curvas=n_curvas, n_pontos=n_pontos,
                                   formulacao_perda=formulacao_perda)
-        modelo, tok_in, tok_out = MODELO_SEM_LLM, math.nan, math.nan
+        modelo, tok_in, tok_out, meta = MODELO_SEM_LLM, math.nan, math.nan, math.nan
     else:
         if not isinstance(cfg_llm, pl.ConfiguracaoLLM):
             raise ValueError(f"condição {condicao} exige cfg_llm (ConfiguracaoLLM)")
@@ -375,10 +376,14 @@ def executar_m1(
         d_out = depois.tokens_saida - antes.tokens_saida
         tok_in, tok_out = (float(d_in), float(d_out)) if (d_in or d_out) else (math.nan, math.nan)
         modelo = cfg_llm.rotulo
+        backend = getattr(avaliador, "backend", None)
+        meta_d = backend.model_metadata() if hasattr(backend, "model_metadata") else {}
+        meta = json.dumps({**pl._metadados_padrao(cfg_llm, cfg_llm.quantizacao), **meta_d},
+                          default=str)
     t_llm = float(linha.get("tempo_llm_s") or 0.0)
     t_rs = float(linha["tempo_s"]) - t_llm
     linha.update(
-        modo="M1", modelo=modelo, tokens_entrada=tok_in, tokens_saida=tok_out,
+        modo="M1", modelo=modelo, metadados_modelo=meta, tokens_entrada=tok_in, tokens_saida=tok_out,
         tempo_inferencia_s=t_llm,
         razao_tempo_llm_rs=(t_llm / t_rs) if (condicao != "A" and t_rs > 0) else math.nan,
     )

@@ -15,7 +15,10 @@ Estrutura::
 - Id único: ``<prefixo>_<AAAAMMDD-HHMMSS>_<6 hex aleatórios>``.
 - Retomada: a chave do ensaio é nível x modo x condição x algoritmo x modelo x ruído x
   semente (algoritmo e ruído entram para que ensaios M1 de algoritmos de RS ou ruídos
-  diferentes não colidam); ensaios já registrados são pulados por :meth:`executar`.
+  diferentes não colidam). ``modelo`` é a identidade completa
+  (``ConfiguracaoLLM.rotulo``: ``provedor/modelo@revisao[quantizacao]``), de modo que outra
+  revisão ou quantização nunca reaproveita ensaios gravados. Ensaios ``ok`` já registrados
+  são pulados por :meth:`executar`.
 - Segredos: tudo o que é gravado passa por :func:`sanear` (chaves sensíveis pelo nome,
   padrões de chave de API e valores das variáveis de credencial do ambiente).
 - :func:`carregar_resultados` lê o próprio formato e os CSV/JSON antigos do notebook 01,
