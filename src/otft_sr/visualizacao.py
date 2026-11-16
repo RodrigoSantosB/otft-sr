@@ -20,6 +20,7 @@ from physics_llm_sr.symbolic.expression import evaluate, parse_infix
 
 from otft_sr import ovsed
 from otft_sr.dados import construir_datasets
+from otft_sr.gerador import protecao_padrao
 from otft_sr.niveis import FEATURES, nivel
 
 #: Curva medida de referência por nível (transferência a V_DS fixo ou saída a V_GS fixo).
@@ -97,7 +98,9 @@ def previsoes_teste(linha: Mapping[str, Any], n_curvas: int = 20, n_pontos: int 
     """Pontos de TESTE do ensaio com I_D verdadeiro, observado e previsto (em unidades de I_D).
 
     Reconstrói os dados (determinísticos por nível, ruído e semente). Na formulação ``log10``
-    a expressão prevê log10(I_D) e a previsão é ``10^f``. Linha sem expressão: DataFrame vazio.
+    a expressão prevê log10(I_D) e a previsão é ``10^f``. Proteção numérica e corte do
+    expoente iguais aos de ``experimento.metricas_expressao``. Linha sem expressão ou com
+    erro de execução: DataFrame vazio.
     """
     expr = linha.get("expressao")
     if not isinstance(expr, str) or linha.get("status") != "ok":
@@ -105,7 +108,7 @@ def previsoes_teste(linha: Mapping[str, Any], n_curvas: int = 20, n_pontos: int 
     n = nivel(str(linha["nivel"]))
     ds = construir_datasets(n, float(linha.get("ruido", 0.0)), int(linha.get("semente", 0)),
                             n_curvas, n_pontos)["teste"]
-    yhat = evaluate(parse_infix(expr, FEATURES), ds.X, FEATURES)
+    yhat = evaluate(parse_infix(expr, FEATURES), ds.X, FEATURES, protecao_padrao())
     if linha.get("formulacao_perda") == "log10":
         yhat = 10.0 ** np.clip(yhat, -300, 300)
     return pd.DataFrame({

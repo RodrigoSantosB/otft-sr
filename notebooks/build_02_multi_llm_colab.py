@@ -385,8 +385,9 @@ md(r"""
 
 **Finalidade:** referência pareada para B/C. **Método:** `executar_m1` com $w_3 = 0$ em todos os
 níveis × algoritmos de RS × ruídos × sementes, retomável; resultados antigos (notebook 01)
-podem ser importados por `ARQUIVOS_LINHA_DE_BASE`, mantendo só ensaios cuja referência é a
-atual. **Resultado esperado:** uma linha por ensaio em `metrics.csv`; importados só exibidos.
+podem ser importados por `ARQUIVOS_LINHA_DE_BASE`, mantendo só ensaios com a referência atual,
+a mesma configuração de busca, o mesmo tamanho de dados (`n_curvas`, `n_pontos`) e a mesma
+formulação da perda. **Resultado esperado:** uma linha por ensaio em `metrics.csv`; importados só exibidos.
 """)
 
 code(r"""
@@ -406,7 +407,8 @@ if "M1" in CFG.modos and "A" in CFG.condicoes_m1:
               f"| RMSE log10 = {linha.get('rmse_log10', float('nan')):.3g} | {linha['classe']}")
     sincronizar_drive()
 
-LINHA_DE_BASE_IMPORTADA, relatorio_importacao = campanha.importar_linha_de_base(ARQUIVOS_LINHA_DE_BASE)
+LINHA_DE_BASE_IMPORTADA, relatorio_importacao = campanha.importar_linha_de_base(
+    ARQUIVOS_LINHA_DE_BASE, CFG, rotulo_busca=ROTULO_BUSCA)
 if len(relatorio_importacao):
     display(relatorio_importacao)
 if len(LINHA_DE_BASE_IMPORTADA):
@@ -474,6 +476,7 @@ modelo; modelos que não discriminam têm B/C sem interpretação física.
 
 code(r"""
 from otft_sr.auditoria import auditar_avaliador, resumo_discriminacao
+from otft_sr.persistencia import gravar_csv, gravar_json
 from otft_sr.provedores_llm import criar_avaliador_m1, usar_provedor
 
 
@@ -498,7 +501,7 @@ for cfg_llm in CFG.modelos if CFG.condicoes_m1_llm else ():
             av = criar_avaliador_m1(cfg_llm, c, provedor=prov, dir_cache=None, registro=REG_USO)
             df_a = auditar_avaliador(av, nivel(nid), CFG.formulacao_perda).assign(modelo=cfg_llm.rotulo, condicao=c)
             AUDITORIA = pd.concat([AUDITORIA, df_a], ignore_index=True)
-            AUDITORIA.to_csv(ARQ_AUDITORIA, index=False)
+            gravar_csv(ARQ_AUDITORIA, AUDITORIA)  # resposta_crua saneada
     sincronizar_drive()
 
 RESUMO_AUDITORIA = pd.DataFrame([
@@ -616,9 +619,10 @@ nível × modo × condição × modelo com IC 95 % de Wilson; diferenças paread
 pares); qualidade (média e IC t). Ensaios com `erro_execucao` ficam fora de todos os
 denominadores e cada tabela informa `n_excluido_erro`; não convergência conta como não
 recuperação;
-custo (chamadas, tokens, tempo, razão tempo de LLM / tempo de RS contra 0,4 do artigo).
-Comparações rotuladas **equivalente** (mesmo esforço: mesma configuração de busca ou mesmo
-número de candidatos) ou **exploratória** (esforço diferente: G2, M1 × M2).
+custo (chamadas, tokens, tempo; no M1, razão tempo de LLM / tempo de RS contra 0,4 do artigo;
+no M2, tempo de inferência / tempo de ajuste, à parte). Comparações rotuladas **equivalente**
+(mesmo esforço: mesma configuração de busca em A e B/C, ou mesmo número de candidatos) ou
+**exploratória** (esforço diferente: `configuracao_busca_llm` distinta, G2, M1 × M2).
 **Resultado esperado:** tabelas `TAXA`, `COMPARACOES`, `QUALIDADE`, `CUSTO`.
 """)
 
@@ -644,6 +648,7 @@ def comparar(rotulo: str, nid: str, filtro_a: dict, filtro_b: dict, tipo: str) -
             "p_mcnemar": mc.get("p_valor", nan), "nota": r["nota"]}
 
 
+TIPO_A_LLM = campanha.tipo_comparacao_a_llm(CFG)  # equivalente só com a mesma configuração de busca
 comps = []
 for nid in sorted(DF["nivel"].dropna().unique()):
     for m in CFG.modelos:
@@ -651,7 +656,7 @@ for nid in sorted(DF["nivel"].dropna().unique()):
             base = {"modo": "M1", "algoritmo": alg}
             for c in CFG.condicoes_m1_llm:
                 comps.append(comparar(f"M1 A × {c} ({m.rotulo}, {alg})", nid, {**base, "condicao": "A"},
-                                      {**base, "condicao": c, "modelo": m.rotulo}, "equivalente"))
+                                      {**base, "condicao": c, "modelo": m.rotulo}, TIPO_A_LLM))
             comps.append(comparar(f"M1 B × C ({m.rotulo}, {alg})", nid, {**base, "condicao": "B", "modelo": m.rotulo},
                                   {**base, "condicao": "C", "modelo": m.rotulo}, "equivalente"))
         g = {"modo": "M2", "modelo": m.rotulo}
@@ -668,14 +673,17 @@ display(QUALIDADE.pivot_table(index=list(GRUPOS), columns="metrica", values="med
 CUSTO = est.tabela_custo_qualidade(DF, grupos=GRUPOS).assign(tipo_comparacao="exploratória (custo efetivo)")
 ESFORCO = est.tabela_esforco_equivalente(DF, grupos=("nivel", "modo", "condicao", "modelo")).assign(
     tipo_comparacao="equivalente (mesmo número de candidatos)")
-RAZAO_TEMPO = est.tabela_razao_tempo_llm(DF)
+RAZAO_TEMPO = est.tabela_razao_tempo_llm(DF)  # só M1
+TEMPO_M2 = est.tabela_tempo_inferencia_m2(DF)
 USO_LLM = pd.DataFrame.from_dict(REG_USO.como_dict(), orient="index")
 display(Markdown("**Custo efetivo × qualidade**"))
 display(CUSTO)
 display(Markdown("**Esforço equivalente (M2)**"))
 display(ESFORCO)
-display(Markdown("**Tempo de LLM / tempo de RS (referência do artigo: 0,4)**"))
+display(Markdown("**M1: tempo de LLM / tempo de RS (referência do artigo: 0,4)**"))
 display(RAZAO_TEMPO)
+display(Markdown("**M2: tempo de inferência / tempo de ajuste (não comparável ao 0,4)**"))
+display(TEMPO_M2)
 display(Markdown("**Uso por modelo nesta sessão (chamadas, tokens, segundos)**"))
 display(USO_LLM)
 """)
@@ -731,10 +739,11 @@ RESUMO = REGISTRO.finalizar()
 tabelas = {"benchmark_recuperacao.csv": TAXA, "benchmark_comparacoes.csv": COMPARACOES,
            "benchmark_qualidade.csv": QUALIDADE, "benchmark_custo.csv": CUSTO,
            "benchmark_esforco_equivalente.csv": ESFORCO, "benchmark_razao_tempo_llm.csv": RAZAO_TEMPO,
+           "benchmark_tempo_inferencia_m2.csv": TEMPO_M2,
            "auditoria_resumo.csv": RESUMO_AUDITORIA}
 for nome, tab in tabelas.items():
-    tab.to_csv(REGISTRO.diretorio / nome, index=False)
-(REGISTRO.diretorio / "uso_llm.json").write_text(json.dumps(REG_USO.como_dict(), indent=1))
+    gravar_csv(REGISTRO.diretorio / nome, tab)  # saneado como todo o results/<id>/
+gravar_json(REGISTRO.diretorio / "uso_llm.json", REG_USO.como_dict())
 REGISTRO.log("exportacao", arquivos=sorted(tabelas))
 sincronizar_drive()
 

@@ -37,7 +37,7 @@ import os
 import re
 import secrets
 import subprocess
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +49,7 @@ from otft_sr.experimento import COLUNAS_M1, STATUS_ERRO_EXECUCAO, STATUS_OK
 from otft_sr.gerador import COLUNAS_M2, carregar_templates
 from otft_sr.gerador import hash_templates as _hash_templates
 from otft_sr.ovsed import RAIZ_PROJETO
+from otft_sr import provedores_llm as _pl
 from otft_sr.provedores_llm import CREDENCIAL_PADRAO, relatorio_ambiente
 
 ARQUIVOS: tuple[str, ...] = (
@@ -77,9 +78,33 @@ _PADROES_SEGREDO = re.compile(
 MASCARA = "***"
 
 
+#: Nomes de credenciais dos modelos configurados (``registrar_credenciais``) cujos valores
+#: também são lidos do Colab Secrets para o saneamento.
+_NOMES_CREDENCIAIS: set[str] = set()
+#: Valores já lidos do Colab Secrets nesta sessão (nome -> valor ou ``None``).
+_SEGREDOS_COLAB: dict[str, str | None] = {}
+
+
+def registrar_credenciais(nomes: Iterable[str | None]) -> None:
+    """Acrescenta NOMES de credenciais (ex.: ``ConfiguracaoLLM.credencial`` dos modelos
+    configurados) cujos valores, se existirem no ambiente ou no Colab Secrets, são
+    mascarados em toda saída gravada. Nenhum outro segredo do Colab é consultado."""
+    _NOMES_CREDENCIAIS.update(n for n in nomes if n)
+
+
 def _valores_credenciais() -> list[str]:
-    nomes = set(CREDENCIAL_PADRAO.values())
-    return [v for n in nomes if (v := os.environ.get(n)) and len(v) >= 8]
+    """Valores das credenciais conhecidas: variáveis de ambiente de :data:`CREDENCIAL_PADRAO`
+    e das registradas; no Colab, também ``userdata.get`` só dos nomes registrados (lido uma
+    vez por sessão; ``userdata`` nunca é enumerado)."""
+    nomes = set(CREDENCIAL_PADRAO.values()) | _NOMES_CREDENCIAIS
+    valores = {v for n in nomes if (v := os.environ.get(n))}
+    if _NOMES_CREDENCIAIS and _pl.em_colab():
+        for n in sorted(_NOMES_CREDENCIAIS):
+            if n not in _SEGREDOS_COLAB:
+                _SEGREDOS_COLAB[n] = _pl._ler_segredo_colab(n)
+            if _SEGREDOS_COLAB[n]:
+                valores.add(_SEGREDOS_COLAB[n])
+    return sorted((v for v in valores if len(v) >= 8), key=len, reverse=True)
 
 
 def sanear(obj: Any, _creds: list[str] | None = None) -> Any:
@@ -175,10 +200,30 @@ def _escrever_json(caminho: Path, obj: Any) -> None:
 
 def _escrever_csv(caminho: Path, df: pd.DataFrame) -> None:
     creds = _valores_credenciais()
-    df = df.apply(lambda col: col.map(lambda v: sanear(v, creds) if isinstance(v, str) else v))
+    df = df.copy()
+    for col in df.columns:
+        if isinstance(col, str) and _CHAVE_SENSIVEL.search(col):
+            df[col] = df[col].map(lambda v: MASCARA if isinstance(v, str) and v else v)
+        else:
+            df[col] = df[col].map(lambda v: sanear(v, creds) if isinstance(v, str) else v)
     tmp = caminho.with_suffix(caminho.suffix + ".tmp")
     df.to_csv(tmp, index=False)
     tmp.replace(caminho)
+
+
+def gravar_csv(caminho: Path | str, df: pd.DataFrame) -> Path:
+    """Grava ``df`` saneado (:func:`sanear` em todo valor de texto; colunas de nome sensível
+    mascaradas). Use para TODA tabela gravada em ``results/<id>/`` (auditoria, benchmark)."""
+    caminho = Path(caminho)
+    _escrever_csv(caminho, df)
+    return caminho
+
+
+def gravar_json(caminho: Path | str, obj: Any) -> Path:
+    """Grava ``obj`` saneado em JSON (ex.: ``uso_llm.json``)."""
+    caminho = Path(caminho)
+    _escrever_json(caminho, obj)
+    return caminho
 
 
 def _valor_csv(v: Any) -> Any:

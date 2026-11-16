@@ -272,26 +272,53 @@ def tabela_custo_qualidade(
 RAZAO_TEMPO_LLM_RS_ARTIGO = 0.4
 
 
-def tabela_razao_tempo_llm(
-    df: pd.DataFrame, grupos: Sequence[str] = ("nivel", "modo", "condicao", "modelo", "algoritmo")
+def _tabela_razao_tempo(
+    df: pd.DataFrame, modo: str, col_llm: str, grupos: Sequence[str], nomes: tuple[str, str, str]
 ) -> pd.DataFrame:
-    """Razão tempo de LLM / tempo de RS (``tempo_llm_s / (tempo_s - tempo_llm_s)``) por grupo,
-    só para ensaios com LLM (``tempo_llm_s > 0``), ao lado da referência do artigo (0,4)."""
-    if not {"tempo_s", "tempo_llm_s"} <= set(df.columns):
+    """Razão ``col_llm / (tempo_s - col_llm)`` por grupo, só no ``modo`` e só em ensaios com
+    LLM (``col_llm > 0``) sem erro de execução (``n_excluido_erro`` reportado)."""
+    if not {"tempo_s", col_llm} <= set(df.columns):
         return pd.DataFrame()
+    if "modo" in df.columns:
+        df = df[df["modo"] == modo]
     t = pd.to_numeric(df["tempo_s"], errors="coerce")
-    tl = pd.to_numeric(df["tempo_llm_s"], errors="coerce")
-    sub = _com_grupos(df.assign(_razao=tl / (t - tl))[(tl > 0) & (t - tl > 0)], grupos)
+    tl = pd.to_numeric(df[col_llm], errors="coerce")
+    sub = _com_grupos(df.assign(_razao=tl / (t - tl), _erro=erro_execucao(df))[
+        (tl > 0) & (t - tl > 0)], grupos)
     linhas = []
     for chave, g in sub.groupby(list(grupos), dropna=False, sort=True):
         chave = chave if isinstance(chave, tuple) else (chave,)
-        v = g["_razao"].to_numpy(float)
+        n_err = int(g["_erro"].sum())
+        g = g[~g["_erro"]]
+        if g.empty:
+            continue
+        tl_g = pd.to_numeric(g[col_llm])
         linhas.append({
-            **dict(zip(grupos, chave, strict=True)), "n_ensaios": len(g),
-            "tempo_llm_s_media": float(pd.to_numeric(g["tempo_llm_s"]).mean()),
-            "tempo_rs_s_media": float((pd.to_numeric(g["tempo_s"])
-                                       - pd.to_numeric(g["tempo_llm_s"])).mean()),
-            "razao_tempo_llm_rs_media": float(v.mean()),
-            "razao_artigo": RAZAO_TEMPO_LLM_RS_ARTIGO,
+            **dict(zip(grupos, chave, strict=True)), "n_ensaios": len(g), "n_excluido_erro": n_err,
+            nomes[0]: float(tl_g.mean()),
+            nomes[1]: float((pd.to_numeric(g["tempo_s"]) - tl_g).mean()),
+            nomes[2]: float(g["_razao"].to_numpy(float).mean()),
         })
     return pd.DataFrame(linhas)
+
+
+def tabela_razao_tempo_llm(
+    df: pd.DataFrame, grupos: Sequence[str] = ("nivel", "modo", "condicao", "modelo", "algoritmo")
+) -> pd.DataFrame:
+    """M1: razão tempo de LLM / tempo de RS (``tempo_llm_s / (tempo_s - tempo_llm_s)``) por
+    grupo, só para ensaios com LLM, ao lado da referência do artigo (0,4). O M2 não entra
+    (não há RS): ver :func:`tabela_tempo_inferencia_m2`."""
+    t = _tabela_razao_tempo(df, "M1", "tempo_llm_s", grupos,
+                            ("tempo_llm_s_media", "tempo_rs_s_media", "razao_tempo_llm_rs_media"))
+    return t.assign(razao_artigo=RAZAO_TEMPO_LLM_RS_ARTIGO) if len(t) else t
+
+
+def tabela_tempo_inferencia_m2(
+    df: pd.DataFrame, grupos: Sequence[str] = ("nivel", "modo", "condicao", "modelo")
+) -> pd.DataFrame:
+    """M2: razão tempo de inferência / tempo de ajuste e avaliação
+    (``tempo_inferencia_s / (tempo_s - tempo_inferencia_s)``); não comparável ao 0,4 do
+    artigo, que se refere ao LLM dentro da RS."""
+    return _tabela_razao_tempo(
+        df, "M2", "tempo_inferencia_s", grupos,
+        ("tempo_inferencia_s_media", "tempo_ajuste_s_media", "razao_inferencia_ajuste_media"))

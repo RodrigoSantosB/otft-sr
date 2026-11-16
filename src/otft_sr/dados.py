@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import numpy as np
@@ -161,3 +162,11 @@ def hash_datasets(datasets: dict[str, Dataset]) -> str:
             h.update(a.tobytes())
         h.update(json.dumps(d.metadata, sort_keys=True, default=str).encode())
     return h.hexdigest()
+
+
+def dimensoes_datasets(ds: Mapping[str, Dataset]) -> tuple[int, int]:
+    """``(n_curvas, n_pontos)`` efetivos de ``construir_datasets`` (curvas somadas nas
+    partições; pontos por curva)."""
+    n_curvas = sum(len(d.metadata["curvas"]) for d in ds.values())
+    n_total = sum(int(d.y_true.size) for d in ds.values())
+    return n_curvas, n_total // n_curvas

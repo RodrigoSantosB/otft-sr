@@ -41,6 +41,14 @@ def test_notebook_02_secoes_e_sem_saidas():
     assert all(not c.get("outputs") for c in nb.cells if c.cell_type == "code")
 
 
+def test_notebook_02_grava_saidas_so_com_saneamento():
+    """Toda tabela/JSON gravado pelo notebook passa por persistencia.gravar_* (sanear)."""
+    codigo = "\n".join(c.source for c in nbformat.read(IPYNB, as_version=4).cells
+                       if c.cell_type == "code")
+    assert ".to_csv(" not in codigo and ".write_text(" not in codigo and "json.dump(" not in codigo
+    assert "gravar_csv(ARQ_AUDITORIA" in codigo and 'gravar_json(REGISTRO.diretorio / "uso_llm.json"' in codigo
+
+
 def preparar(nb, backend: str = "simulado", extra: dict[str, str] | None = None):
     """Força EXECUCAO_DE_VERIFICACAO = True e o backend de verificação no bloco de configuração."""
     alvo = next(c for c in nb.cells if c.cell_type == "code" and "EXECUCAO_DE_VERIFICACAO =" in c.source)

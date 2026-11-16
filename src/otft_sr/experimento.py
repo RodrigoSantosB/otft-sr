@@ -35,7 +35,7 @@ from physics_llm_sr.symbolic.tree_distance import TreeDistanceParams
 from physics_llm_sr.workflows.baseline_study import ConsistencyCriteria, classify
 
 from otft_sr.contexto import VARIANTE_PROMPT, contexto_fisico
-from otft_sr.dados import construir_datasets
+from otft_sr.dados import construir_datasets, dimensoes_datasets
 from otft_sr.equivalencia import mesma_forma_funcional
 from otft_sr.formulacao import (
     datasets_formulados,
@@ -92,7 +92,8 @@ STATUS_ERRO_EXECUCAO = "erro_execucao"
 #: próprias; ``erro``/``traceback`` só existem em ensaios com ``status = "erro_execucao"``.
 COLUNAS_M1: tuple[str, ...] = (
     "nivel", "nivel_proposta", "algoritmo", "condicao", "ruido", "semente",
-    "configuracao_busca", "formulacao_perda", "expressao_referencia", "n_treino", "n_teste",
+    "configuracao_busca", "formulacao_perda", "expressao_referencia", "n_curvas", "n_pontos",
+    "n_treino", "n_teste",
     "tempo_s", "stop_reason", "n_geracoes", "expressao", "n_nos", "one_minus_r2",
     "one_minus_r2_I_D", "rmse_log10",
     "frac_pred_nao_positiva", "tree_distance", "tree_distance_equivalent_min",
@@ -302,6 +303,8 @@ def executar_condicao(
         ),
         "formulacao_perda": formulacao_perda,
         "expressao_referencia": nivel.expressao,
+        "n_curvas": dimensoes_datasets(ds)[0],
+        "n_pontos": dimensoes_datasets(ds)[1],
         "n_treino": int(ds["treino"].y_observed.size),
         "n_teste": int(ds["teste"].y_observed.size),
     }

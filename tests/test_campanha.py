@@ -114,17 +114,51 @@ def test_sincronizar(tmp_path):
 
 def test_importar_linha_de_base_filtra_referencia_atual(tmp_path):
     atual = nivel("N1").expressao
+    comum = {"nivel": "N1", "algoritmo": "deap", "ruido": 0.0, "status": "ok",
+             "classe": "não recupera", "configuracao_busca": "calibrada", "n_curvas": 20,
+             "n_pontos": 50, "formulacao_perda": "linear"}
     pd.DataFrame([
-        {"nivel": "N1", "algoritmo": "deap", "condicao": "A", "ruido": 0.0, "semente": 0,
-         "expressao_referencia": atual, "status": "ok", "classe": "não recupera"},
-        {"nivel": "N1", "algoritmo": "deap", "condicao": "A", "ruido": 0.0, "semente": 1,
-         "expressao_referencia": "1.0 * V_GS", "status": "ok", "classe": "não recupera"},
-        {"nivel": "N1", "algoritmo": "deap", "condicao": "B", "ruido": 0.0, "semente": 0,
-         "expressao_referencia": atual, "status": "ok", "classe": "não recupera"},
+        {**comum, "condicao": "A", "semente": 0, "expressao_referencia": atual},
+        {**comum, "condicao": "A", "semente": 1, "expressao_referencia": "1.0 * V_GS"},
+        {**comum, "condicao": "B", "semente": 0, "expressao_referencia": atual},
     ]).to_csv(tmp_path / "rs_otft_x.csv", index=False)
-    df, rel = cp.importar_linha_de_base([str(tmp_path / "*.csv"), str(tmp_path / "nada*.json")])
+    df, rel = cp.importar_linha_de_base([str(tmp_path / "*.csv"), str(tmp_path / "nada*.json")],
+                                        _cfg())
     assert len(df) == 1 and df["semente"].iloc[0] == 0 and df["modo"].iloc[0] == "M1"
     assert rel.loc[0, "linhas"] == 3 and rel.loc[0, "aceitas"] == 1
+
+
+def test_importar_linha_de_base_filtra_busca_dados_e_formulacao(tmp_path):
+    atual = nivel("N1").expressao
+    ok = {"nivel": "N1", "algoritmo": "deap", "condicao": "A", "ruido": 0.0, "status": "ok",
+          "expressao_referencia": atual, "configuracao_busca": "calibrada", "n_curvas": 20,
+          "n_pontos": 50, "formulacao_perda": "linear"}
+    linhas = [
+        {**ok, "semente": 0},                                      # aceita
+        {**ok, "semente": 1, "configuracao_busca": "verificacao"},  # outra busca
+        {**ok, "semente": 2, "n_curvas": 10},                       # outros dados
+        {**ok, "semente": 3, "n_pontos": 30},
+        {**ok, "semente": 4, "formulacao_perda": "log10"},          # outra formulação
+        # antigas sem n_curvas/n_pontos: conferidas por n_treino/n_teste (12 e 4 curvas x 50)
+        {**ok, "semente": 5, "n_curvas": None, "n_pontos": None, "n_treino": 600, "n_teste": 200},
+        {**ok, "semente": 6, "n_curvas": None, "n_pontos": None, "n_treino": 300, "n_teste": 100},
+        {**ok, "semente": 7, "n_curvas": None, "n_pontos": None},  # sem como conferir
+    ]
+    pd.DataFrame(linhas).to_csv(tmp_path / "x.csv", index=False)
+    df, rel = cp.importar_linha_de_base([str(tmp_path / "x.csv")], _cfg())
+    assert sorted(df["semente"]) == [0, 5]
+    assert rel.loc[0, "aceitas"] == 2
+    log10 = cp.importar_linha_de_base([str(tmp_path / "x.csv")], _cfg(formulacao_perda="log10"))[0]
+    assert sorted(log10["semente"]) == [4]
+    verif = cp.importar_linha_de_base([str(tmp_path / "x.csv")], _cfg(), rotulo_busca="verificacao")[0]
+    assert sorted(verif["semente"]) == [1]
+
+
+def test_tipo_da_comparacao_A_com_LLM():
+    assert cp.tipo_comparacao_a_llm(_cfg()) == "equivalente"
+    assert cp.tipo_comparacao_a_llm(_cfg(configuracao_busca_llm="calibrada")) == "equivalente"
+    assert cp.tipo_comparacao_a_llm(_cfg(configuracao_busca_llm="verificacao")) == "exploratória"
+    assert cp.tipo_comparacao_a_llm(_cfg(configuracao_busca_llm={"sr.population": 8})) == "exploratória"
 
 
 def test_conclusoes_em_verificacao_declaram_ausencia_de_resultado():

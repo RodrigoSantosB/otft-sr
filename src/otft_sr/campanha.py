@@ -23,11 +23,12 @@ from typing import Any
 import pandas as pd
 
 from otft_sr.contexto import MODELO_OLLAMA, URL_OLLAMA
+from otft_sr.dados import construir_datasets
 from otft_sr.experimento import ALGORITMOS_RS, CONDICOES, CONFIGURACOES_BUSCA, MODELO_SEM_LLM
 from otft_sr.formulacao import FORMULACOES, nivel_formulado
 from otft_sr.gerador import ALGORITMO_M2, CONDICOES_GERACAO
 from otft_sr.niveis import escada, nivel
-from otft_sr.persistencia import RegistroExperimento, carregar_resultados
+from otft_sr.persistencia import RegistroExperimento, carregar_resultados, registrar_credenciais
 from otft_sr.provedores_llm import ConfiguracaoLLM, recomendar_quantizacao, responder_simulado
 
 MODOS: tuple[str, ...] = ("M1", "M2")
@@ -305,6 +306,7 @@ def abrir_registro(raiz: Path | str, cfg: ConfiguracaoExperimento,
     incompatível (campos que mudam o significado dos ensaios já gravados): troque o
     ``nome_experimento`` para uma nova campanha."""
     destino = Path(raiz) / cfg.id_experimento
+    registrar_credenciais(m.credencial for m in cfg.modelos)  # saneamento (Colab Secrets)
     atual = cfg.como_dict()
     arq = destino / "config.json"
     if arq.is_file():
@@ -336,14 +338,42 @@ def sincronizar(origem: Path | str, destino: Path | str | None) -> Path | None:
 # --------------------------------------------------------------------- linha de base
 
 
-def importar_linha_de_base(padroes: Sequence[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
+def rotulo_da_busca(busca: str | Mapping[str, Any]) -> str:
+    """Rótulo gravado em ``configuracao_busca`` (nome ou ``definida_pelo_usuario``)."""
+    return busca if isinstance(busca, str) else "definida_pelo_usuario"
+
+
+def tipo_comparacao_a_llm(cfg: ConfiguracaoExperimento) -> str:
+    """A × B/C é ``equivalente`` só com a mesma configuração de busca em A e em B/C
+    (``configuracao_busca_llm`` ausente ou igual); senão ``exploratória``."""
+    return "equivalente" if cfg.busca_llm_efetiva == cfg.configuracao_busca else "exploratória"
+
+
+def _tamanhos_esperados(n_curvas: int, n_pontos: int) -> tuple[int, int]:
+    ds = construir_datasets(escada()[0], 0.0, 0, n_curvas, n_pontos)
+    return int(ds["treino"].y_observed.size), int(ds["teste"].y_observed.size)
+
+
+def importar_linha_de_base(
+    padroes: Sequence[str], cfg: ConfiguracaoExperimento, rotulo_busca: str | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Lê resultados existentes (``carregar_resultados``: formato atual ou CSV/JSON do
-    notebook 01) e mantém só ensaios M1/A cuja ``expressao_referencia`` é a referência ATUAL
-    do nível (resultados anteriores à revisão de regiões ou à renumeração são descartados).
+    notebook 01) e mantém só ensaios M1/A comparáveis aos da campanha ``cfg``:
+
+    - ``expressao_referencia`` igual à referência ATUAL do nível (resultados anteriores à
+      revisão de regiões ou à renumeração são descartados);
+    - ``configuracao_busca`` igual a ``rotulo_busca`` (padrão: rótulo de
+      ``cfg.configuracao_busca``);
+    - ``formulacao_perda`` igual à de ``cfg`` (ausente = ``linear``, anterior à opção);
+    - dados do mesmo tamanho: ``n_curvas``/``n_pontos`` iguais aos de ``cfg``; em linhas
+      antigas sem essas colunas, ``n_treino`` e ``n_teste`` iguais aos que ``cfg`` produz
+      (condição necessária; linhas sem nenhuma das contagens são descartadas).
 
     Devolve ``(aceitos, relatorio)``; ``relatorio`` tem uma linha por arquivo.
     """
     atuais = {n.id: n.expressao for n in escada()}
+    busca = rotulo_busca or rotulo_da_busca(cfg.configuracao_busca)
+    n_tr, n_te = _tamanhos_esperados(cfg.n_curvas, cfg.n_pontos)
     aceitos, rel = [], []
     arquivos = sorted({a for p in padroes for a in glob.glob(str(p))})
     for arq in arquivos:
@@ -352,9 +382,17 @@ def importar_linha_de_base(padroes: Sequence[str]) -> tuple[pd.DataFrame, pd.Dat
         except Exception as exc:  # noqa: BLE001 - arquivo ilegível é relatado, não interrompe
             rel.append({"arquivo": arq, "linhas": 0, "aceitas": 0, "erro": f"{type(exc).__name__}: {exc}"})
             continue
-        ok = df[(df["condicao"] == "A") & (df["expressao_referencia"] == df["nivel"].map(atuais))]
-        if "formulacao_perda" in ok:
-            ok = ok[ok["formulacao_perda"].isna() | (ok["formulacao_perda"] == "linear")]
+        num = {c: pd.to_numeric(df[c], errors="coerce") if c in df else pd.Series(float("nan"), index=df.index)
+               for c in ("n_curvas", "n_pontos", "n_treino", "n_teste")}
+        com_dimensoes = num["n_curvas"].notna() & num["n_pontos"].notna()
+        mesmos_dados = (com_dimensoes & (num["n_curvas"] == cfg.n_curvas)
+                        & (num["n_pontos"] == cfg.n_pontos)) | (
+            ~com_dimensoes & (num["n_treino"] == n_tr) & (num["n_teste"] == n_te))
+        formulacao = df["formulacao_perda"].fillna("linear") if "formulacao_perda" in df else "linear"
+        m = ((df["condicao"] == "A") & (df["expressao_referencia"] == df["nivel"].map(atuais))
+             & (df.get("configuracao_busca") == busca) & (formulacao == cfg.formulacao_perda)
+             & mesmos_dados)
+        ok = df[m]
         aceitos.append(ok.assign(origem=Path(arq).name))
         rel.append({"arquivo": arq, "linhas": len(df), "aceitas": len(ok), "erro": None})
     df = pd.concat(aceitos, ignore_index=True) if aceitos else pd.DataFrame()

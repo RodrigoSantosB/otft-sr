@@ -63,7 +63,7 @@ from physics_llm_sr.symbolic.expression import variables as variaveis_da_express
 from physics_llm_sr.symbolic.operators import OPERATORS, ProtectionParams
 
 from otft_sr.contexto import contexto_fisico
-from otft_sr.dados import construir_datasets, hash_datasets
+from otft_sr.dados import construir_datasets, dimensoes_datasets, hash_datasets
 from otft_sr.experimento import (
     COLUNAS_M1,
     MAX_NOS,
@@ -1082,6 +1082,8 @@ def executar_geracao(
         "configuracao_busca": f"geracao_n{n_candidatos}_k{k}",
         "formulacao_perda": FORMULACAO_M2,
         "expressao_referencia": nivel.expressao,
+        "n_curvas": dimensoes_datasets(ds)[0],
+        "n_pontos": dimensoes_datasets(ds)[1],
         "n_treino": int(ds["treino"].y_observed.size),
         "n_teste": int(ds["teste"].y_observed.size),
         "n_geracoes": k + 1,

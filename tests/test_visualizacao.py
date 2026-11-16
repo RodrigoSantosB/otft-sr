@@ -37,6 +37,20 @@ def test_previsoes_da_referencia_coincidem_com_o_verdadeiro(formulacao):
     assert np.allclose(prev["I_D_previsto"], prev["I_D_verdadeiro"], rtol=1e-8)
 
 
+def test_previsoes_usam_a_protecao_numerica_das_metricas(monkeypatch):
+    """Mesma ProtectionParams de metricas_expressao (configuração do M1), não o padrão."""
+    import dataclasses
+
+    from otft_sr.gerador import protecao_padrao
+
+    linha = _linha("N1", expressao="log(V_GS - 49.9)")
+    base = vz.previsoes_teste(linha, 10, 10)["I_D_previsto"].to_numpy()
+    outra = dataclasses.replace(protecao_padrao(), log_epsilon=10.0)
+    monkeypatch.setattr(vz, "protecao_padrao", lambda: outra)
+    mudou = vz.previsoes_teste(linha, 10, 10)["I_D_previsto"].to_numpy()
+    assert not np.allclose(base, mudou)
+
+
 def test_previsoes_linha_com_erro_vazia():
     assert vz.previsoes_teste({"status": "erro", "expressao": float("nan")}).empty
 

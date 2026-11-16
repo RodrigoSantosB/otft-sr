@@ -220,6 +220,49 @@ def test_nunca_grava_segredos(tmp_path, monkeypatch):
     assert re.fullmatch(r"[0-9a-f]{64}", meta.get("hash_templates", {}).get("conjunto", "0" * 64))
 
 
+def test_gravar_csv_e_json_saneiam_saidas_do_notebook(tmp_path, monkeypatch):
+    """auditoria_avaliador.csv (resposta_crua), benchmark_*.csv e uso_llm.json passam por
+    sanear, inclusive coluna com nome sensível."""
+    chave_env = "chave-de-ambiente-0123456789"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", chave_env)
+    aud = pd.DataFrame({"rotulo": ["referencia"], "c": [0.1],
+                        "resposta_crua": [f"eco {chave_env} e sk-vazada0123456789"],
+                        "api_key": ["qualquer"]})
+    persistencia.gravar_csv(tmp_path / "auditoria_avaliador.csv", aud)
+    persistencia.gravar_json(tmp_path / "uso_llm.json",
+                             {"openai/m": {"chamadas": 3, "erro": f"Bearer {chave_env}"}})
+    for nome in ("auditoria_avaliador.csv", "uso_llm.json"):
+        texto = (tmp_path / nome).read_text("utf-8")
+        assert chave_env not in texto and "sk-vazada" not in texto and "qualquer" not in texto
+    lido = pd.read_csv(tmp_path / "auditoria_avaliador.csv")
+    assert lido.loc[0, "c"] == 0.1 and lido.loc[0, "rotulo"] == "referencia"
+    assert json.loads((tmp_path / "uso_llm.json").read_text("utf-8"))["openai/m"]["chamadas"] == 3
+
+
+def test_credenciais_do_colab_saneadas_sem_consultar_outros_segredos(tmp_path, monkeypatch):
+    from otft_sr import provedores_llm as pl
+
+    consultados = []
+    segredo = "valor-colab-sem-formato-9876543210"
+
+    def ler(nome):
+        consultados.append(nome)
+        return segredo if nome == "MINHA_CHAVE_LLM" else None
+
+    monkeypatch.setattr(pl, "_ler_segredo_colab", ler)
+    monkeypatch.setattr(pl, "em_colab", lambda: True)
+    monkeypatch.setattr(persistencia, "_SEGREDOS_COLAB", {})
+    monkeypatch.setattr(persistencia, "_NOMES_CREDENCIAIS", set())
+    for v in pl.CREDENCIAL_PADRAO.values():
+        monkeypatch.delenv(v, raising=False)
+    persistencia.registrar_credenciais(["MINHA_CHAVE_LLM"])
+    persistencia.gravar_csv(tmp_path / "x.csv", pd.DataFrame({"resposta_crua": [f"a {segredo} b"]}))
+    assert segredo not in (tmp_path / "x.csv").read_text("utf-8")
+    assert set(consultados) == {"MINHA_CHAVE_LLM"}  # só nomes de credenciais configuradas
+    persistencia.gravar_csv(tmp_path / "y.csv", pd.DataFrame({"a": [1]}))
+    assert consultados == ["MINHA_CHAVE_LLM"]  # lido uma vez por sessão
+
+
 def test_sanear_preserva_hashes_e_contadores():
     obj = {"hash_datasets": "ab" * 32, "tokens_entrada": 120, "chave_ensaio": "N1|M2",
            "api_key": "qualquer", "texto": "x sk-abcdefghijk y"}

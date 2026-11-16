@@ -180,3 +180,21 @@ def test_tabela_razao_tempo_llm():
     assert b["razao_artigo"] == RAZAO_TEMPO_LLM_RS_ARTIGO == 0.4
     assert t[t["condicao"] == "A"].empty  # sem LLM: fora da tabela
     assert np.isclose(b["n_ensaios"], 2)
+
+
+def test_razao_de_tempo_so_M1_e_M2_separado():
+    from otft_sr.estatistica import tabela_tempo_inferencia_m2
+
+    df = pd.DataFrame({
+        "nivel": ["N1"] * 4, "modo": ["M1", "M2", "M2", "M2"], "condicao": ["B", "G1", "G1", "G1"],
+        "modelo": ["m"] * 4, "algoritmo": ["deap"] + ["llm_gerador"] * 3,
+        "tempo_s": [14.0, 10.0, 30.0, 99.0], "tempo_llm_s": [4.0, 8.0, 20.0, 1.0],
+        "tempo_inferencia_s": [4.0, 8.0, 20.0, 1.0], "status": ["ok", "ok", "ok", "erro_execucao"],
+    })
+    t = tabela_razao_tempo_llm(df)
+    assert list(t["modo"]) == ["M1"]  # comparável ao 0,4 do artigo só no M1
+    m2 = tabela_tempo_inferencia_m2(df)
+    assert list(m2["modo"]) == ["M2"] and m2.loc[0, "n_ensaios"] == 2
+    assert m2.loc[0, "n_excluido_erro"] == 1
+    assert m2.loc[0, "razao_inferencia_ajuste_media"] == pytest.approx((8 / 2 + 20 / 10) / 2)
+    assert "razao_artigo" not in m2
