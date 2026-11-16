@@ -188,11 +188,27 @@ def comparacao_pareada(
     vb = pd.to_numeric(par[f"{metrica}_b"], errors="coerce")
     finito = np.isfinite(va) & np.isfinite(vb)
     ok = ~com_erro & finito
-    res = paired_comparison(va[ok].to_numpy(), vb[ok].to_numpy(), alternative=alternativa)
-    saida: dict[str, Any] = {
+    base: dict[str, Any] = {
         "metrica": metrica, "filtro_a": dict(filtro_a), "filtro_b": dict(filtro_b),
-        "n_pares": res.n, "n_excluido_erro": int(com_erro.sum()),
+        "n_excluido_erro": int(com_erro.sum()),
         "n_excluido_metrica": int((~com_erro & ~finito).sum()),
+    }
+    if not ok.any():
+        # Sem pares válidos (ex.: M2 sem candidato válido em um lado, ou nenhuma semente em
+        # comum): não há teste estatístico; nunca um p-valor fictício.
+        saida = {**base, "n_pares": 0, "n_nao_nulos": 0, "diferenca_media": float("nan"),
+                 "estatistica": None, "p_valor": None, "cohens_dz": None, "rank_biserial": None,
+                 "metodo": None,
+                 "nota": (f"sem pares válidos ({len(par)} pareados por chave; "
+                          f"{base['n_excluido_erro']} com erro de execução; "
+                          f"{base['n_excluido_metrica']} sem {metrica} finita)")}
+        if "classe" in df.columns:
+            saida["mcnemar_recuperacao"] = {"n11": 0, "n10": 0, "n01": 0, "n00": 0,
+                                            "p_valor": float("nan"), "metodo": "mcnemar_exato"}
+        return saida
+    res = paired_comparison(va[ok].to_numpy(), vb[ok].to_numpy(), alternative=alternativa)
+    saida = {
+        **base, "n_pares": res.n,
         "n_nao_nulos": res.n_nonzero, "diferenca_media": res.mean_diff,
         "estatistica": res.statistic, "p_valor": res.p_value, "cohens_dz": res.cohens_dz,
         "rank_biserial": res.rank_biserial, "metodo": res.method, "nota": res.note,

@@ -165,3 +165,22 @@ def test_agregacao_e_tabelas_reportam_excluidos():
         g1 = t[t["condicao"] == "G1"].iloc[0]
         assert g1["n_ensaios"] == 3 and g1["n_excluido_erro"] == 1
         assert g1["taxa_recuperacao"] == pytest.approx(2 / 3)
+
+
+def test_comparacao_pareada_sem_pares_validos_nao_falha():
+    """M2 sem candidato válido em um lado (rmse_log10 NaN em todos os pares): sem teste
+    estatístico, n_pares = 0 e nota explicativa — nunca exceção nem p-valor fictício."""
+    df = _df()
+    df.loc[df["condicao"] == "G0", "rmse_log10"] = np.nan
+    r = comparacao_pareada(df, "rmse_log10", {"condicao": "G0"}, {"condicao": "G1"})
+    assert r["n_pares"] == 0 and r["n_excluido_metrica"] == 4
+    assert r["p_valor"] is None and math.isnan(r["diferenca_media"])
+    assert "sem pares" in r["nota"]
+    assert math.isnan(r["mcnemar_recuperacao"]["p_valor"])
+
+
+def test_comparacao_pareada_sem_ensaios_pareaveis_nao_falha():
+    df = _df()
+    df.loc[df["condicao"] == "G1", "semente"] += 100  # nenhuma semente em comum
+    r = comparacao_pareada(df, "rmse_log10", {"condicao": "G0"}, {"condicao": "G1"})
+    assert r["n_pares"] == 0 and r["p_valor"] is None
