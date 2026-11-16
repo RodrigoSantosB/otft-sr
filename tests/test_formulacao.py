@@ -124,3 +124,35 @@ def test_repo_physics_llm_sr_por_variavel_de_ambiente(monkeypatch, tmp_path):
     repo = experimento.repo_physics_llm_sr()
     assert (repo / "configs" / "nb01_baseline.yaml").is_file()
     assert isinstance(repo, Path)
+
+
+# ------------------------------------------- critério de recuperação comum (H-OTFT-19)
+
+
+def _linha_classificavel(**kw):
+    base = {"status": "ok", "tree_distance": 0.0, "tree_distance_equivalent_min": 0.0,
+            "tree_distance_algebraic": 0.0, "forma_funcional_sympy": True}
+    return {**base, **kw}
+
+
+def test_criterio_de_ajuste_em_I_D_linear_na_formulacao_log10():
+    """Ajuste excelente em log10 mas ruim em I_D não recupera; o critério é sempre I_D."""
+    from otft_sr.experimento import classificar_linha
+
+    ruim_em_I_D = _linha_classificavel(formulacao_perda="log10", one_minus_r2=1e-6,
+                                       one_minus_r2_I_D=0.05)
+    assert not classificar_linha(ruim_em_I_D)["classe"].startswith("recupera estrutura")
+    bom_em_I_D = _linha_classificavel(formulacao_perda="log10", one_minus_r2=0.01,
+                                      one_minus_r2_I_D=1e-4)
+    assert classificar_linha(bom_em_I_D)["classe"] == "recupera estrutura"
+    sympy = _linha_classificavel(formulacao_perda="log10", one_minus_r2=0.01,
+                                 one_minus_r2_I_D=1e-4, tree_distance=1.0,
+                                 tree_distance_equivalent_min=1.0, tree_distance_algebraic=1.0)
+    assert classificar_linha(sympy)["classe"].startswith("recupera estrutura (equivalência")
+
+
+def test_criterio_linha_antiga_sem_I_D_usa_one_minus_r2():
+    from otft_sr.experimento import classificar_linha
+
+    antiga = _linha_classificavel(one_minus_r2=1e-5)
+    assert classificar_linha(antiga)["classe"] == "recupera estrutura"

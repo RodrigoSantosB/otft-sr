@@ -218,7 +218,9 @@ def metricas_expressao(
     Com ``nivel`` na formulação ``log10`` (:func:`otft_sr.formulacao.nivel_formulado`),
     ``y_true`` e a expressão estão em log10(I_D): ``one_minus_r2`` é medido em log10,
     ``rmse_log10`` é o RMSE direto em década e ``one_minus_r2_I_D`` compara 10^f com I_D.
-    Na formulação linear ``one_minus_r2_I_D == one_minus_r2``.
+    Na formulação linear ``one_minus_r2_I_D == one_minus_r2``. ``one_minus_r2_I_D`` e
+    ``rmse_log10`` existem nas duas formulações e no M2; o critério de recuperação usa
+    ``one_minus_r2_I_D`` (:func:`classificar_linha`).
     """
     prot = ProtectionParams.from_config(cfg.symbolic)
     yhat = evaluate(expr, X, FEATURES, prot)
@@ -397,11 +399,31 @@ def executar_m1(
     return linha
 
 
+def _ajuste_em_I_D(linha: dict[str, Any]) -> float:
+    """1 - R^2 no espaço físico linear (I_D de teste): ``one_minus_r2_I_D``; linhas antigas
+    sem a coluna usam ``one_minus_r2`` (até a opção log10 as duas eram iguais)."""
+    v = linha.get("one_minus_r2_I_D")
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        v = math.nan
+    if math.isnan(v) and linha.get("formulacao_perda") != "log10":
+        v = float(linha.get("one_minus_r2", math.nan))
+    return v
+
+
 def classificar_linha(linha: dict[str, Any]) -> dict[str, str]:
     """``classe_distancia`` (critério do ``physics_llm_sr``) e ``classe`` (com a equivalência
-    sympy, H-OTFT-07b) de uma linha de ensaio; comum aos modos M1 e M2."""
+    sympy, H-OTFT-07b) de uma linha de ensaio; comum aos modos M1 e M2.
+
+    Critério único (H-OTFT-19) para M1 linear, M1 log10 e M2: forma funcional (distâncias
+    de árvore ou equivalência sympy contra a referência da formulação, que no log10 é a
+    referência log10 expandida) e ajuste com 1 - R^2 em I_D linear (``one_minus_r2_I_D``)
+    <= 1e-3, nunca o 1 - R^2 no alvo log10.
+    """
+    ajuste = _ajuste_em_I_D(linha)
     classe_distancia = classify(
-        linha.get("one_minus_r2", math.nan),
+        ajuste,
         linha.get("tree_distance", math.nan),
         CRITERIO,
         status="ok" if linha.get("status") == STATUS_OK else "error",
@@ -409,7 +431,7 @@ def classificar_linha(linha: dict[str, Any]) -> dict[str, str]:
         algebraic_distance=linha.get("tree_distance_algebraic", math.nan),
     )
     classe = classe_distancia
-    ajusta = linha.get("one_minus_r2", math.inf) <= CRITERIO.max_one_minus_r2
+    ajusta = math.isfinite(ajuste) and ajuste <= CRITERIO.max_one_minus_r2
     if classe != "recupera estrutura" and ajusta and linha.get("forma_funcional_sympy"):
         classe = CLASSE_SYMPY
     return {"classe_distancia": classe_distancia, "classe": classe}

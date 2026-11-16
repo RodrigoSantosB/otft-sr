@@ -129,13 +129,16 @@ gerados por `src/otft_sr/niveis.py` (constantes arredondadas a 4 algarismos sign
   0,4343 log(...) do polinômio/da soma. A expansão é obrigatória: o `log` protegido vale 0
   para |x| < 1e-3 (GAP-06) e o I_D do N3 desce a ~2e-4 µA. O ruído multiplicativo é aplicado
   em I_D antes do log (mesmos dados da formulação linear; valores ≤ 0 recebem piso de 1e-6 do
-  menor positivo). Métricas: `one_minus_r2` no alvo da formulação (é o que o critério de
-  recuperação usa), `rmse_log10` direto em década (comparável entre formulações) e
-  `one_minus_r2_I_D` com 10^f contra I_D. O contexto enviado ao LLM declara que a equação
-  prevê log10(I_D). Ensaios log10 têm chave de retomada própria; os lineares mantêm a chave
-  anterior. Limite: em log10 o limiar 1 − R² ≤ 1e-3 tem outra severidade e as distâncias de
-  árvore são medidas contra a forma expandida; resultados das duas formulações não entram na
-  mesma comparação pareada.
+  menor positivo). Métricas (teste limpo): `one_minus_r2` no alvo da formulação (só
+  descritiva), `rmse_log10` em década e `one_minus_r2_I_D` (10^f contra I_D), as duas
+  calculadas no M1 linear, no M1 log10 e no M2. Critério de recuperação único para M1 (as
+  duas formulações) e M2: forma funcional (distâncias de árvore ou equivalência sympy; no
+  log10, contra a referência log10 expandida) **e** ajuste com `one_minus_r2_I_D` ≤ 1e-3 no
+  espaço físico linear de I_D; o 1 − R² em log10 nunca decide a classe, de modo que o limiar
+  tem a mesma severidade nas duas formulações e no M2. O contexto enviado ao LLM declara que
+  a equação prevê log10(I_D). Ensaios log10 têm chave de retomada própria; os lineares mantêm
+  a chave anterior. Limite: as distâncias de árvore do log10 são medidas contra a forma
+  expandida; resultados das duas formulações não entram na mesma comparação pareada.
 - **H-OTFT-20 — Decisões do modo M2 (gerador; exploratório), fixadas antes de qualquer
   execução real.** Interpretação: primeiro objeto JSON da resposta, schema pydantic
   (`equation`, `variables`, `parameters`), `parse_infix` com whitelist de AST (sem

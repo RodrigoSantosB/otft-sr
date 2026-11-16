@@ -32,7 +32,7 @@ from otft_sr.experimento import CLASSE_SYMPY, STATUS_OK
 
 GRUPOS_PADRAO: tuple[str, ...] = ("nivel", "modo", "condicao", "modelo")
 METRICAS_PADRAO: tuple[str, ...] = (
-    "rmse_log10", "one_minus_r2", "n_nos", "tree_distance", "tree_distance_algebraic",
+    "rmse_log10", "one_minus_r2", "one_minus_r2_I_D", "n_nos", "tree_distance", "tree_distance_algebraic",
     "rmse_log10_validacao", "taxa_validos", "tempo_s", "tempo_inferencia_s",
 )
 CLASSES_RECUPERACAO: frozenset[str] = frozenset({"recupera estrutura", CLASSE_SYMPY})

@@ -581,7 +581,9 @@ md(r"""
 **Finalidade:** mesmas métricas para M1 e M2. **Método:** relê `results/<id>/metrics.csv`
 (independe das seções 7–11 terem rodado nesta sessão) e confere o controle positivo na
 formulação da perda. Métricas de teste (I_D limpo): RMSE de log10 I_D, $1 - R^2$ (no alvo
-da formulação) e $1 - R^2$ em I_D, nós, distâncias de árvore e classe de recuperação.
+da formulação, só descritivo) e $1 - R^2$ em I_D, nós, distâncias de árvore e classe de
+recuperação. Critério único para M1 (linear e log10) e M2 (H-OTFT-19): forma funcional e
+$1 - R^2$ em I_D linear $\le 10^{-3}$.
 **Resultado esperado:** tabela de ensaios; controle positivo com $1 - R^2 \approx 0$.
 """)
 
