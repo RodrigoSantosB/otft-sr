@@ -177,3 +177,14 @@ def test_retomada_com_quantizacao_diferente_acusa_incompatibilidade(tmp_path):
         cp.abrir_registro(tmp_path, _cfg(modelos=(_hf("8bit"),)))
     with pytest.raises(ValueError, match="modelos"):
         cp.abrir_registro(tmp_path, _cfg(modelos=(dataclasses.replace(_hf("4bit"), revisao="b" * 40),)))
+
+
+def test_conclusoes_reportam_excluidos_por_erro():
+    taxa = pd.DataFrame([{"nivel": "N1", "modo": "M1", "condicao": "A", "modelo": None, "n": 2,
+                          "n_excluido_erro": 1, "n_recuperados": 1, "taxa": 0.5,
+                          "ic95_inf": 0.1, "ic95_sup": 0.9}])
+    comp = pd.DataFrame([{"comparacao": "A vs C", "nivel": "N1", "n_pares": 2,
+                          "n_excluido_erro": 1, "diferenca_media": 0.01, "p_valor": 0.5,
+                          "p_mcnemar": 1.0, "tipo": "equivalente"}])
+    texto = cp.texto_conclusoes(taxa, pd.DataFrame(), comp, _cfg())
+    assert texto.count("1 excluído(s) por erro de execução") == 2

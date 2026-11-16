@@ -67,6 +67,8 @@ from otft_sr.dados import construir_datasets, hash_datasets
 from otft_sr.experimento import (
     COLUNAS_M1,
     MAX_NOS,
+    STATUS_ERRO_EXECUCAO,
+    STATUS_OK,
     OPERADORES,
     classificar_linha,
     construir_config,
@@ -1089,17 +1091,24 @@ def executar_geracao(
         "frac_pred_nao_positiva",
         "tree_distance", "tree_distance_equivalent_min", "tree_distance_algebraic",
         "forma_funcional_sympy")}
-    if sel is None:
-        linha.update(metricas_nan, stop_reason="sem_candidato_valido", status="erro",
-                     erro="nenhum candidato interpretado e ajustado")
-    else:
+    # Falha do provedor (tempo esgotado, memória, API) que esgota as tentativas de algum
+    # candidato impede o esforço planejado: erro de execução (repetido na retomada). Respostas
+    # recebidas mas não interpretáveis são resultado: sem candidato válido = "não converge".
+    falhas_provedor = sum(c.get("categoria_erro") == "erro_provedor" for c in candidatos)
+    if sel is not None:
         candidatos[sel]["selecionado"] = True
+    if falhas_provedor:
+        linha.update(metricas_nan, stop_reason="falha_do_provedor", status=STATUS_ERRO_EXECUCAO,
+                     erro=f"erro_provedor em {falhas_provedor} de {len(candidatos)} candidatos")
+    elif sel is None:
+        linha.update(metricas_nan, stop_reason="sem_candidato_valido", status=STATUS_OK)
+    else:
         try:
             expr = parse_infix(candidatos[sel]["expressao"], FEATURES)
             linha.update(metricas_expressao(expr, nivel, ds["teste"].X, ds["teste"].y_true, cfg_m))
-            linha.update(stop_reason="selecionado_por_validacao", status="ok")
+            linha.update(stop_reason="selecionado_por_validacao", status=STATUS_OK)
         except Exception as exc:  # noqa: BLE001 - registrado como no M1
-            linha.update(metricas_nan, stop_reason="erro_metricas", status="erro",
+            linha.update(metricas_nan, stop_reason="erro_metricas", status=STATUS_ERRO_EXECUCAO,
                          erro=f"{type(exc).__name__}: {exc}",
                          traceback=traceback.format_exc(limit=5))
     linha["tempo_s"] = time.perf_counter() - t0

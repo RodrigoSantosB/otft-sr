@@ -133,6 +133,50 @@ def test_checkpoint_pula_ensaios_concluidos(tmp_path):
     assert "ensaio_pulado" in log
 
 
+def test_retomada_repete_erro_de_execucao_por_padrao(tmp_path):
+    chamadas = []
+    respostas = iter([_linha(status="erro_execucao", erro="TimeoutError"),
+                      _linha(status="ok", classe="não converge"),
+                      _linha(status="ok")])
+
+    def f():
+        chamadas.append(1)
+        return next(respostas)
+
+    campos = dict(nivel="N1", modo="M2", condicao="G1", algoritmo="llm_gerador",
+                  modelo="fake/x", ruido=0.0, semente=0)
+    reg = RegistroExperimento(tmp_path, {})
+    assert reg.executar(campos, f)["status"] == "erro_execucao"
+    assert not reg.concluido(campos)  # erro de execução não conclui o ensaio
+    reaberto = RegistroExperimento.abrir(reg.diretorio)
+    assert reaberto.executar(campos, f)["classe"] == "não converge"  # repetido
+    assert reaberto.concluido(campos)
+    reaberto.executar(campos, f)  # "não converge" é resultado: não é repetido
+    assert len(chamadas) == 2
+    assert len(pd.read_csv(reg.diretorio / "metrics.csv")) == 1
+
+
+def test_retomada_pode_manter_erros(tmp_path):
+    chamadas = []
+
+    def f():
+        chamadas.append(1)
+        return _linha(status="erro_execucao")
+
+    campos = dict(nivel="N1", modo="M2", condicao="G1", algoritmo="llm_gerador",
+                  modelo="fake/x", ruido=0.0, semente=0)
+    reg = RegistroExperimento(tmp_path, {})
+    reg.executar(campos, f)
+    reg.executar(campos, f, repetir_erros=False)
+    assert len(chamadas) == 1
+
+
+def test_status_legado_erro_vira_erro_de_execucao(tmp_path):
+    pd.DataFrame({"nivel": ["N1", "N1"], "algoritmo": ["deap", "deap"], "condicao": ["A", "A"],
+                  "semente": [0, 1], "status": ["ok", "erro"]}).to_csv(tmp_path / "x.csv", index=False)
+    assert list(carregar_resultados(tmp_path / "x.csv")["status"]) == ["ok", "erro_execucao"]
+
+
 def test_chave_distingue_modelo_e_condicao():
     reg_chave = persistencia.chave_ensaio
     a = reg_chave(_linha())

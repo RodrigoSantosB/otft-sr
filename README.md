@@ -69,10 +69,13 @@ Decisões (pré-definidas, antes de qualquer execução real; registradas em H-O
 
 Persistência e estatística comuns a M1/M2: `otft_sr.persistencia.RegistroExperimento` grava
 `results/<id>/` (config, ambiente com commit git, métricas, resumo, candidatos, equações,
-metadados de geração com hashes, log JSONL, figuras), pula ensaios já registrados e nunca grava
-segredos; `carregar_resultados` lê também os CSV/JSON antigos do notebook 01
-(`data/legado/colunas_notebook01.json`). `otft_sr.estatistica` agrega (IC 95 % t), calcula
-recuperação com IC de Wilson, comparação pareada por semente (Wilcoxon) e McNemar exato.
+metadados de geração com hashes, log JSONL, figuras), pula ensaios já registrados com
+`status = "ok"`, repete os de `status = "erro_execucao"` (falha de infraestrutura; não
+convergência é `ok` com classe "não converge") e nunca grava segredos; `carregar_resultados`
+lê também os CSV/JSON antigos do notebook 01 (`data/legado/colunas_notebook01.json`).
+`otft_sr.estatistica` agrega (IC 95 % t), calcula recuperação com IC de Wilson, comparação
+pareada por semente (Wilcoxon) e McNemar exato sobre o mesmo conjunto de pares, sempre sem os
+erros de execução (cada tabela informa `n_excluido_erro`).
 
 ## Notebook 02 no Colab (multi-LLM, M1 e M2)
 

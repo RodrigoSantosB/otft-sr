@@ -55,6 +55,7 @@ def test_executar_condicao_com_erro_registra_status_erro_sem_excecao(monkeypatch
 
     monkeypatch.setattr(experimento, "make_regressor", falha)
     linha = executar_condicao(N1, "deap", "A", 0.0, 0, "verificacao", n_curvas=4, n_pontos=20)
-    assert linha["status"] == "erro"
+    assert linha["status"] == "erro_execucao"
+    assert linha["classe"] == "erro de execução"
     assert "RuntimeError: falha forçada" in linha["erro"]
     assert not linha["classe"].startswith("recupera estrutura")

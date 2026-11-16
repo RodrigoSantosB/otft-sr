@@ -381,11 +381,15 @@ def texto_conclusoes(
         return ("**Execução de verificação (não constitui resultado).** A configuração mínima e o "
                 "backend de verificação só demonstram que o pipeline executa de ponta a ponta; "
                 "nenhuma taxa, diferença ou p-valor desta execução deve ser interpretado.")
-    linhas = ["### Recuperação simbólica (IC 95 % de Wilson)"]
+    def excluidos(r: Any) -> str:
+        n = r.get("n_excluido_erro", 0)
+        return f"; {int(n)} excluído(s) por erro de execução" if pd.notna(n) and n else ""
+
+    linhas = ["### Recuperação simbólica (IC 95 % de Wilson; erros de execução fora do denominador)"]
     for _, r in taxa.sort_values(["nivel", "modo", "condicao"]).iterrows():
         linhas.append(f"- {r['nivel']} {r['modo']} {r['condicao']} ({r.get('modelo') or 'sem LLM'}): "
                       f"{int(r['n_recuperados'])}/{int(r['n'])} = {_pct(r['taxa'])} "
-                      f"[{_pct(r['ic95_inf'])}; {_pct(r['ic95_sup'])}]")
+                      f"[{_pct(r['ic95_inf'])}; {_pct(r['ic95_sup'])}]{excluidos(r)}")
     if len(auditoria):
         linhas.append("\n### Auditoria do avaliador (pré-requisito de B/C)")
         for _, r in auditoria.iterrows():
@@ -397,9 +401,9 @@ def texto_conclusoes(
     if len(comparacoes):
         linhas.append("\n### Comparações pareadas por semente")
         for _, r in comparacoes.iterrows():
-            linhas.append(f"- {r['comparacao']} ({r['nivel']}): n = {r['n_pares']}, Δ RMSE log10 "
-                          f"médio = {r['diferenca_media']:.3g} déc, p (Wilcoxon) = {r['p_valor']:.3g}, "
-                          f"p (McNemar) = {r['p_mcnemar']:.3g} [{r['tipo']}].")
+            linhas.append(f"- {r['comparacao']} ({r['nivel']}): n = {r['n_pares']}{excluidos(r)}, "
+                          f"Δ RMSE log10 médio = {r['diferenca_media']:.3g} déc, p (Wilcoxon) = "
+                          f"{r['p_valor']:.3g}, p (McNemar) = {r['p_mcnemar']:.3g} [{r['tipo']}].")
     n_s = len(cfg.sementes)
     linhas.append(f"\nCom {n_s} semente(s) por condição experimental os IC são largos; ausência de significância "
                   "não é evidência de ausência de efeito.")

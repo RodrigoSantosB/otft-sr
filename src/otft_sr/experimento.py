@@ -79,10 +79,17 @@ PESOS_LLM: tuple[float, float, float] = _pesos(RAZAO_W2_W1, RAZAO_W3_W1)
 PESOS_LINHA_DE_BASE: tuple[float, float, float] = _pesos(RAZAO_W2_W1, 0.0)
 CRITERIO = ConsistencyCriteria(max_one_minus_r2=1e-3, max_tree_distance=0.05)
 CLASSE_SYMPY = "recupera estrutura (equivalência sympy)"
+#: ``status`` de um ensaio: ``ok`` (o ensaio executou como planejado; inclui a não
+#: convergência, que é resultado científico e recebe a classe "não converge") ou
+#: ``erro_execucao`` (falha de infraestrutura: exceção, falta de memória, tempo esgotado,
+#: falha de API). Ensaios ``erro_execucao`` são repetidos na retomada e ficam fora dos
+#: denominadores da estatística.
+STATUS_OK = "ok"
+STATUS_ERRO_EXECUCAO = "erro_execucao"
 
 #: Esquema de colunas de uma linha de ensaio (M1, ``executar_condicao``), na ordem gravada.
 #: O modo M2 (``otft_sr.gerador.executar_geracao``) grava as mesmas colunas e acrescenta as
-#: próprias; ``erro``/``traceback`` só existem em ensaios com erro.
+#: próprias; ``erro``/``traceback`` só existem em ensaios com ``status = "erro_execucao"``.
 COLUNAS_M1: tuple[str, ...] = (
     "nivel", "nivel_proposta", "algoritmo", "condicao", "ruido", "semente",
     "configuracao_busca", "formulacao_perda", "expressao_referencia", "n_treino", "n_teste",
@@ -306,10 +313,10 @@ def executar_condicao(
         linha.update(
             metricas_expressao(fit.best_expression, nivel, ds["teste"].X, ds["teste"].y_true, cfg)
         )
-        linha["status"] = "ok"
+        linha["status"] = STATUS_OK
     except Exception as exc:  # ensaio com erro é registrado, não interrompe o desenho experimental
         linha["tempo_s"] = time.perf_counter() - t0
-        linha["status"] = "erro"
+        linha["status"] = STATUS_ERRO_EXECUCAO
         linha["erro"] = f"{type(exc).__name__}: {exc}"
         linha["traceback"] = traceback.format_exc(limit=5)
     cont = objetivo.counters.as_dict()
@@ -397,7 +404,7 @@ def classificar_linha(linha: dict[str, Any]) -> dict[str, str]:
         linha.get("one_minus_r2", math.nan),
         linha.get("tree_distance", math.nan),
         CRITERIO,
-        status="ok" if linha.get("status") == "ok" else "error",
+        status="ok" if linha.get("status") == STATUS_OK else "error",
         equivalent_distance=linha.get("tree_distance_equivalent_min", math.nan),
         algebraic_distance=linha.get("tree_distance_algebraic", math.nan),
     )

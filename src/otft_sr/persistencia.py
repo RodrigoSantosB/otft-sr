@@ -45,7 +45,7 @@ import numpy as np
 import pandas as pd
 
 from otft_sr.estatistica import agregar
-from otft_sr.experimento import COLUNAS_M1
+from otft_sr.experimento import COLUNAS_M1, STATUS_ERRO_EXECUCAO, STATUS_OK
 from otft_sr.gerador import COLUNAS_M2, carregar_templates
 from otft_sr.gerador import hash_templates as _hash_templates
 from otft_sr.ovsed import RAIZ_PROJETO
@@ -255,7 +255,7 @@ class RegistroExperimento:
         c = self.diretorio / "candidates.csv"
         if c.is_file():
             self._candidatos = pd.read_csv(c).to_dict("records")
-        self._chaves = {chave_ensaio(x) for x in self._linhas}
+        self._status = {chave_ensaio(x): x.get("status") for x in self._linhas}
         if existente:
             self.log("experimento_retomado", n_ensaios=len(self._linhas))
 
@@ -280,8 +280,9 @@ class RegistroExperimento:
         return chave_ensaio(linha)
 
     def concluido(self, campos: Mapping[str, Any]) -> bool:
-        """``True`` se o ensaio de ``campos`` já foi registrado."""
-        return chave_ensaio(campos) in self._chaves
+        """``True`` se o ensaio de ``campos`` já foi registrado com ``status = "ok"``
+        (ensaios com erro de execução continuam pendentes)."""
+        return self._status.get(chave_ensaio(campos)) == STATUS_OK
 
     # --------------------------------------------------------------- gravação
 
@@ -297,7 +298,7 @@ class RegistroExperimento:
         ch = chave_ensaio(linha)
         linha["chave_ensaio"] = ch
         self._linhas = [x for x in self._linhas if chave_ensaio(x) != ch] + [linha]
-        self._chaves.add(ch)
+        self._status[ch] = linha.get("status")
         _escrever_csv(self.diretorio / "metrics.csv",
                       _ordenar_colunas(pd.DataFrame([{k: _valor_csv(v) for k, v in x.items()}
                                                      for x in self._linhas])))
@@ -342,17 +343,18 @@ class RegistroExperimento:
         self,
         campos: Mapping[str, Any],
         funcao: Callable[[], Any],
-        repetir_erros: bool = False,
+        repetir_erros: bool = True,
     ) -> dict[str, Any]:
         """Executa ``funcao`` (que devolve ``linha``, ``(linha, candidatos)`` ou
         ``(linha, candidatos, metadados)``) só se o ensaio de ``campos`` não foi registrado.
 
         ``campos`` completa a linha (ex.: ``modo``/``modelo`` no M1) e precisa gerar a mesma
-        chave. ``repetir_erros=True`` reexecuta ensaios registrados com ``status != 'ok'``.
+        chave. Ensaios registrados com ``status = "erro_execucao"`` (falha de infraestrutura)
+        são reexecutados por padrão; ``repetir_erros=False`` os mantém.
         """
         ch = chave_ensaio(campos)
         anterior = next((x for x in self._linhas if chave_ensaio(x) == ch), None)
-        if anterior is not None and not (repetir_erros and anterior.get("status") != "ok"):
+        if anterior is not None and not (repetir_erros and anterior.get("status") != STATUS_OK):
             self.log("ensaio_pulado", chave=ch)
             return anterior
         res = funcao()
@@ -411,6 +413,8 @@ def normalizar_resultados(df: pd.DataFrame, metadados: Mapping[str, Any] | None 
     for col, valores in mapa["valores"].items():
         if col in df.columns:
             df[col] = df[col].replace(valores)
+    if "status" in df.columns:  # status antigo "erro" = exceção na execução
+        df["status"] = df["status"].replace({"erro": STATUS_ERRO_EXECUCAO})
     if "modo" not in df.columns and (legado or "algoritmo" in df.columns):
         df["modo"] = "M1"  # o notebook 01 só executa o modo M1 (executar_condicao)
     return _ordenar_colunas(df)

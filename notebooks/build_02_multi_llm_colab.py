@@ -47,7 +47,8 @@ discrimina a referência de formas erradas.
 
 **Uso.** Edite as seções 2 (ambiente) e 4 (configuração única) e execute em ordem. Toda etapa
 longa é retomável: após queda da sessão, execute de novo as seções 2–4 e continue; ensaios já
-gravados em `results/<id>/` são pulados. Premissas: `references/premissas_cientificas.md`
+gravados em `results/<id>/` com `status = "ok"` são pulados e ensaios com `erro_execucao`
+(falha de infraestrutura: exceção, memória, tempo esgotado, API) são repetidos. Premissas: `references/premissas_cientificas.md`
 (H-OTFT-01…20).
 """)
 
@@ -606,7 +607,10 @@ md(r"""
 
 **Finalidade:** quantificar o efeito do LLM. **Método:** recuperação por
 nível × modo × condição × modelo com IC 95 % de Wilson; diferenças pareadas por semente
-(Wilcoxon no RMSE de log10 I_D e McNemar exato na recuperação); qualidade (média e IC t);
+(Wilcoxon no RMSE de log10 I_D e McNemar exato na recuperação, sobre o mesmo conjunto de
+pares); qualidade (média e IC t). Ensaios com `erro_execucao` ficam fora de todos os
+denominadores e cada tabela informa `n_excluido_erro`; não convergência conta como não
+recuperação;
 custo (chamadas, tokens, tempo, razão tempo de LLM / tempo de RS contra 0,4 do artigo).
 Comparações rotuladas **equivalente** (mesmo esforço: mesma configuração de busca ou mesmo
 número de candidatos) ou **exploratória** (esforço diferente: G2, M1 × M2).
@@ -630,6 +634,7 @@ def comparar(rotulo: str, nid: str, filtro_a: dict, filtro_b: dict, tipo: str) -
     mc = r.get("mcnemar_recuperacao", {})
     nan = float("nan")
     return {"comparacao": rotulo, "nivel": nid, "tipo": tipo, "n_pares": r["n_pares"],
+            "n_excluido_erro": r["n_excluido_erro"], "n_excluido_metrica": r["n_excluido_metrica"],
             "diferenca_media": r["diferenca_media"], "p_valor": nan if r["p_valor"] is None else r["p_valor"],
             "p_mcnemar": mc.get("p_valor", nan), "nota": r["nota"]}
 
