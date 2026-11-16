@@ -63,10 +63,12 @@ from physics_llm_sr.symbolic.expression import variables as variaveis_da_express
 from physics_llm_sr.symbolic.operators import OPERATORS, ProtectionParams
 
 from otft_sr.contexto import contexto_fisico
-from otft_sr.dados import construir_datasets, hash_datasets
+from otft_sr.dados import construir_datasets, dimensoes_datasets, hash_datasets
 from otft_sr.experimento import (
     COLUNAS_M1,
     MAX_NOS,
+    STATUS_ERRO_EXECUCAO,
+    STATUS_OK,
     OPERADORES,
     classificar_linha,
     construir_config,
@@ -84,6 +86,9 @@ from otft_sr.provedores_llm import (
 
 CONDICOES_GERACAO: tuple[str, ...] = ("G0", "G1", "G2")
 ALGORITMO_M2 = "llm_gerador"
+#: Valor de ``formulacao_perda`` no M2: expressão em I_D, parâmetros ajustados com resíduo em
+#: log10|I_D| (métricas de teste iguais às do M1 linear).
+FORMULACAO_M2 = "ajuste_log10"
 MODO_M2 = "M2"
 DIR_PROMPTS_GERADOR = RAIZ_PROJETO / "prompts" / "gerador"
 SECOES_PROMPT: tuple[str, ...] = (
@@ -1075,26 +1080,37 @@ def executar_geracao(
         "ruido": ruido,
         "semente": semente,
         "configuracao_busca": f"geracao_n{n_candidatos}_k{k}",
+        "formulacao_perda": FORMULACAO_M2,
         "expressao_referencia": nivel.expressao,
+        "n_curvas": dimensoes_datasets(ds)[0],
+        "n_pontos": dimensoes_datasets(ds)[1],
         "n_treino": int(ds["treino"].y_observed.size),
         "n_teste": int(ds["teste"].y_observed.size),
         "n_geracoes": k + 1,
     }
     metricas_nan = {c: math.nan for c in (
-        "expressao", "n_nos", "one_minus_r2", "rmse_log10", "frac_pred_nao_positiva",
+        "expressao", "n_nos", "one_minus_r2", "one_minus_r2_I_D", "rmse_log10",
+        "frac_pred_nao_positiva",
         "tree_distance", "tree_distance_equivalent_min", "tree_distance_algebraic",
         "forma_funcional_sympy")}
-    if sel is None:
-        linha.update(metricas_nan, stop_reason="sem_candidato_valido", status="erro",
-                     erro="nenhum candidato interpretado e ajustado")
-    else:
+    # Falha do provedor (tempo esgotado, memória, API) que esgota as tentativas de algum
+    # candidato impede o esforço planejado: erro de execução (repetido na retomada). Respostas
+    # recebidas mas não interpretáveis são resultado: sem candidato válido = "não converge".
+    falhas_provedor = sum(c.get("categoria_erro") == "erro_provedor" for c in candidatos)
+    if sel is not None:
         candidatos[sel]["selecionado"] = True
+    if falhas_provedor:
+        linha.update(metricas_nan, stop_reason="falha_do_provedor", status=STATUS_ERRO_EXECUCAO,
+                     erro=f"erro_provedor em {falhas_provedor} de {len(candidatos)} candidatos")
+    elif sel is None:
+        linha.update(metricas_nan, stop_reason="sem_candidato_valido", status=STATUS_OK)
+    else:
         try:
             expr = parse_infix(candidatos[sel]["expressao"], FEATURES)
             linha.update(metricas_expressao(expr, nivel, ds["teste"].X, ds["teste"].y_true, cfg_m))
-            linha.update(stop_reason="selecionado_por_validacao", status="ok")
+            linha.update(stop_reason="selecionado_por_validacao", status=STATUS_OK)
         except Exception as exc:  # noqa: BLE001 - registrado como no M1
-            linha.update(metricas_nan, stop_reason="erro_metricas", status="erro",
+            linha.update(metricas_nan, stop_reason="erro_metricas", status=STATUS_ERRO_EXECUCAO,
                          erro=f"{type(exc).__name__}: {exc}",
                          traceback=traceback.format_exc(limit=5))
     linha["tempo_s"] = time.perf_counter() - t0

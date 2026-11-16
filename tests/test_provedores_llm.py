@@ -102,6 +102,28 @@ def test_rotulo_arquivo_seguro():
     assert cfg.rotulo_arquivo.endswith("4bit")
 
 
+def test_rotulo_inclui_revisao_e_quantizacao():
+    """Identidade do modelo (chave de retomada e coluna ``modelo``): revisão e quantização."""
+    assert ConfiguracaoLLM("openai", "m").rotulo == "openai/m"
+    assert ConfiguracaoLLM("huggingface", "org/m").rotulo == "huggingface/org/m"
+    q4 = ConfiguracaoLLM("huggingface", "org/m", revisao="a" * 40, quantizacao="4bit")
+    q8 = ConfiguracaoLLM("huggingface", "org/m", revisao="a" * 40, quantizacao="8bit")
+    sem = ConfiguracaoLLM("huggingface", "org/m", revisao="a" * 40)
+    assert q4.rotulo == "huggingface/org/m@" + "a" * 12 + "[4bit]"
+    assert sem.rotulo == "huggingface/org/m@" + "a" * 12
+    assert len({q4.rotulo, q8.rotulo, sem.rotulo}) == 3
+
+
+def test_metadados_padrao_completos():
+    from otft_sr.provedores_llm import _metadados_padrao
+
+    cfg = ConfiguracaoLLM("huggingface", "org/m", revisao="a" * 40, quantizacao="4bit")
+    meta = _metadados_padrao(cfg, "bnb-4bit-nf4/float16")
+    assert {"provedor", "modelo", "revisao", "quantizacao", "dtype", "parametros_geracao",
+            "determinismo"} <= set(meta)
+    assert meta["dtype"] == "float16"
+
+
 # ----------------------------------------------------------------------------- fábrica
 
 
@@ -469,7 +491,7 @@ def test_hf_quantizacao_gulosa_semente_e_close(monkeypatch, tmp_path, quant):
     else:
         assert carregar["quantization_config"].kw == {"load_in_8bit": True}
     assert meta["determinismo"] == "deterministico"
-    uso = registro.obter("huggingface/org/m")
+    uso = registro.obter(p.cfg.rotulo)  # inclui [quantizacao]
     assert uso.chamadas == 3 and uso.tokens_entrada == 6 and uso.tokens_saida == 12
 
 

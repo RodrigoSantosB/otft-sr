@@ -29,9 +29,11 @@ Decisões de reprodutibilidade:
 from __future__ import annotations
 
 import gc
+import hashlib
 import importlib
 import importlib.metadata
 import importlib.util
+import json
 import logging
 import os
 import platform
@@ -55,6 +57,7 @@ from physics_llm_sr.llm.inference import (
     FakeBackend,
     OllamaBackend,
     TransformersBackend,
+    deterministic_fake_response,
 )
 from physics_llm_sr.llm.interfaces import (
     BackendConfigurationError,
@@ -196,8 +199,18 @@ class ConfiguracaoLLM:
 
     @property
     def rotulo(self) -> str:
-        """``provedor/modelo`` (chave do registro de uso)."""
-        return f"{self.provedor}/{self.modelo}"
+        """Identidade do modelo: ``provedor/modelo[@revisao12][[quantizacao]]``.
+
+        É a coluna ``modelo`` dos ensaios, entra na chave de retomada e no registro de uso:
+        a mesma revisão com outra quantização (ou outra revisão) é outro modelo. Sem revisão
+        nem quantização (APIs, Ollama, simulado) fica ``provedor/modelo``.
+        """
+        r = f"{self.provedor}/{self.modelo}"
+        if self.revisao:
+            r += f"@{self.revisao[:12]}"
+        if self.quantizacao:
+            r += f"[{self.quantizacao}]"
+        return r
 
     @property
     def rotulo_arquivo(self) -> str:
@@ -421,6 +434,7 @@ def _metadados_padrao(cfg: ConfiguracaoLLM, quantizacao: str | None) -> dict[str
         "modelo": cfg.modelo,
         "revisao": cfg.revisao,
         "quantizacao": quantizacao,
+        "dtype": cfg.dtype if cfg.provedor == "huggingface" else None,
         "parametros_geracao": cfg.parametros_geracao(),
         "determinismo": cfg.determinismo,
     }
@@ -462,6 +476,34 @@ class ProvedorFake:
 
     def __repr__(self) -> str:
         return f"ProvedorFake(modelo={self.cfg.modelo!r})"
+
+
+#: Formas (com chutes) devolvidas pelo responder simulado do modo gerador; genéricas, não
+#: são as equações-alvo dos níveis (só exercitam interpretação, ajuste e seleção).
+_FORMAS_SIMULADAS: tuple[tuple[str, dict[str, float]], ...] = (
+    ("K * (V_GS - V0) ** l", {"K": 1e-3, "V0": 5.0, "l": 2.0}),
+    ("A * exp(b * V_GS) + C", {"A": 1.0, "b": 0.5, "C": 1.0}),
+    ("K * (V_GS - V0) ** 2", {"K": 1e-3, "V0": 5.0}),
+    ("K * V_DS * (V_GS - V0)", {"K": 1e-3, "V0": 5.0}),
+)
+
+
+def responder_simulado(system: str, user: str) -> str:
+    """Resposta SIMULADA e determinística para execuções de verificação (não é resultado).
+
+    Prompt do modo gerador (contém ``"equation"``): JSON com uma forma genérica escolhida
+    pelo hash do prompt. Demais prompts (avaliador M1): escores derivados do hash
+    (``deterministic_fake_response`` do ``physics_llm_sr``).
+    """
+    if '"equation"' not in system + user:
+        return deterministic_fake_response(system, user)
+    i = int(hashlib.sha256((system + "\x00" + user).encode("utf-8")).hexdigest()[:8], 16)
+    equacao, chutes = _FORMAS_SIMULADAS[i % len(_FORMAS_SIMULADAS)]
+    variaveis = [v for v in ("V_GS", "V_DS") if v in equacao]
+    return json.dumps({
+        "equation": equacao, "variables": variaveis, "parameters": chutes,
+        "assumptions": ["simulated response"], "physical_constraints": ["I_D > 0"],
+    })
 
 
 # ------------------------------------------------------------------------------ Ollama

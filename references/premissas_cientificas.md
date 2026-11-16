@@ -120,3 +120,48 @@ gerados por `src/otft_sr/niveis.py` (constantes arredondadas a 4 algarismos sign
   (H-OTFT-07), mas é da ordem do 1 − R² que o próprio ruído de 5 % produz (~4e-3). Já a
   compensação expoente × limiar ((V_GS − V_x)^3,137 contra ^3,18) dá 1 − R² ~ 2e-6 em
   qualquer região e não é resolvida pela escolha da região.
+- **H-OTFT-19 — Formulação da perda do M1 em log10 (opção; padrão "linear").** Com
+  `formulacao_perda = "log10"` (`src/otft_sr/formulacao.py`) o alvo da RS passa a ser
+  log10(I_D) e e = MSE/Var(log10 I_D); nada muda no `physics_llm_sr`. A referência é
+  log10 da expressão do nível, escrita com `log` natural e expandida por sympy (`expand_log`
+  com `force=True`, válido na região, onde as bases são positivas): N1
+  −2,081 + 0,8686 log(V_GS − 20,24); N3 −4,658 + 1,381 log(V_GS − 8,57); N2 e N4 ficam
+  0,4343 log(...) do polinômio/da soma. A expansão é obrigatória: o `log` protegido vale 0
+  para |x| < 1e-3 (GAP-06) e o I_D do N3 desce a ~2e-4 µA. O ruído multiplicativo é aplicado
+  em I_D antes do log (mesmos dados da formulação linear; valores ≤ 0 recebem piso de 1e-6 do
+  menor positivo). Métricas (teste limpo): `one_minus_r2` no alvo da formulação (só
+  descritiva), `rmse_log10` em década e `one_minus_r2_I_D` (10^f contra I_D), as duas
+  calculadas no M1 linear, no M1 log10 e no M2. Critério de recuperação único para M1 (as
+  duas formulações) e M2: forma funcional (distâncias de árvore ou equivalência sympy; no
+  log10, contra a referência log10 expandida) **e** ajuste com `one_minus_r2_I_D` ≤ 1e-3 no
+  espaço físico linear de I_D; o 1 − R² em log10 nunca decide a classe, de modo que o limiar
+  tem a mesma severidade nas duas formulações e no M2. O contexto enviado ao LLM declara que
+  a equação prevê log10(I_D). Ensaios log10 têm chave de retomada própria; os lineares mantêm
+  a chave anterior. Limite: as distâncias de árvore do log10 são medidas contra a forma
+  expandida; resultados das duas formulações não entram na mesma comparação pareada.
+- **H-OTFT-20 — Decisões do modo M2 (gerador; exploratório), fixadas antes de qualquer
+  execução real.** Interpretação: primeiro objeto JSON da resposta, schema pydantic
+  (`equation`, `variables`, `parameters`), `parse_infix` com whitelist de AST (sem
+  eval/exec/sympify), operações do PySR no M1, no máximo 30 nós, profundidade 8 e 6
+  parâmetros, até `max_retentativas` novas tentativas com o motivo da recusa. Ajuste:
+  `least_squares` (TRF) no treino com resíduo em log10|I_D| (proposta §4.4), 8 inícios
+  determinísticos. Checagens físicas no treino e na grade da região (positividade,
+  monotonia em V_GS, limiar, saturação; dimensional só informativa). Seleção só pela
+  validação (fisicamente válido, menor RMSE de log10 I_D com empate a 1e-6 década, menos
+  nós); teste só do selecionado, com as métricas do M1 (`formulacao_perda = "ajuste_log10"`
+  nas linhas do M2). G0 e G1 avaliam `n_candidatos`; G2 avalia `n_candidatos × (1 + k)`, por
+  isso G1 × G2 é comparação exploratória (esforço diferente) e G0 × G1 é equivalente.
+- **H-OTFT-21 — O contexto físico declara princípios qualitativos dos regimes.** O contexto
+  de G1/G2 (`prompts/gerador/contexto_fisico.txt`) e o prompt de dispositivo da condição C
+  (`prompts/dispositivo/base/system.txt`) trazem conhecimento geral de OTFT previsto na
+  proposta (§5.2) que é também informação estrutural sobre os níveis: a mobilidade efetiva
+  cresce com o excesso de tensão de porta V_GS − V_Th (aponta para o expoente > 2 do N3), a
+  corrente sublimiar sobe exponencialmente com V_GS até um piso de fuga constante (aponta
+  para a forma do N4), I_D se anula em V_DS = 0 no triodo e independe de V_DS na saturação
+  (N1/N2). Esses trechos são mantidos de propósito. Por isso as diferenças G0 × G1 (M2) e
+  B × C (M1) medem o efeito do **contexto físico de domínio incluindo princípios qualitativos
+  dos regimes**, não o de ausência total de informação estrutural. A equação, os expoentes
+  e as constantes dos níveis nunca são revelados: `tests/test_contexto_fisico_prompts.py`
+  lista as frases de princípio permitidas e reprova forma matemática explícita (`**`, `^`,
+  `exp(`, `log(`, `(V_GS − V_Th)`) no texto de contexto e as constantes dos níveis em todos os
+  prompts G0/G1/G2 e B/C.

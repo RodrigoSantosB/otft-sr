@@ -4,9 +4,14 @@
   t de Student (``physics_llm_sr.evaluation.statistics.summarize``; n = 1 -> IC indefinido,
   NaN, nunca 0). Valores NaN/infinitos de uma métrica são descartados só dessa métrica.
 - Taxa de recuperação (classes "recupera estrutura" e "recupera estrutura (equivalência
-  sympy)") com IC de Wilson; ensaios com erro entram no denominador como não recuperados.
+  sympy)") com IC de Wilson.
 - Comparação pareada por semente (Wilcoxon de ``physics_llm_sr``: ``paired_comparison``) e
-  McNemar exato (binomial bilateral nos pares discordantes) para a recuperação binária.
+  McNemar exato (binomial bilateral nos pares discordantes) para a recuperação binária,
+  ambos sobre o MESMO conjunto de pares.
+- Erros de execução (``status = "erro_execucao"``: falha de infraestrutura, não resultado)
+  ficam fora de todos os denominadores (Wilson, McNemar, Wilcoxon, médias); toda tabela
+  reporta o n efetivo e ``n_excluido_erro``. Não convergência tem ``status = "ok"`` e conta
+  como não recuperação.
 - Tabela sob esforço equivalente (mesmo número de candidatos avaliados) e tabela
   custo-qualidade (tempo, tokens, custo estimado).
 """
@@ -23,11 +28,11 @@ from scipy import stats
 
 from physics_llm_sr.evaluation.statistics import paired_comparison, summarize
 
-from otft_sr.experimento import CLASSE_SYMPY
+from otft_sr.experimento import CLASSE_SYMPY, STATUS_OK
 
 GRUPOS_PADRAO: tuple[str, ...] = ("nivel", "modo", "condicao", "modelo")
 METRICAS_PADRAO: tuple[str, ...] = (
-    "rmse_log10", "one_minus_r2", "n_nos", "tree_distance", "tree_distance_algebraic",
+    "rmse_log10", "one_minus_r2", "one_minus_r2_I_D", "n_nos", "tree_distance", "tree_distance_algebraic",
     "rmse_log10_validacao", "taxa_validos", "tempo_s", "tempo_inferencia_s",
 )
 CLASSES_RECUPERACAO: frozenset[str] = frozenset({"recupera estrutura", CLASSE_SYMPY})
@@ -70,6 +75,19 @@ def mcnemar_exato(a: Sequence[bool], b: Sequence[bool]) -> dict[str, Any]:
             "p_valor": p, "metodo": "mcnemar_exato"}
 
 
+def erro_execucao(df: pd.DataFrame) -> pd.Series:
+    """``True`` nas linhas com erro de execução (``status`` presente e diferente de ``ok``);
+    linhas sem ``status`` (resultados antigos) não são tratadas como erro."""
+    if "status" not in df.columns:
+        return pd.Series(False, index=df.index)
+    return df["status"].notna() & (df["status"] != STATUS_OK)
+
+
+def _separar_erros(sub: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    e = erro_execucao(sub)
+    return sub[~e], int(e.sum())
+
+
 def _com_grupos(df: pd.DataFrame, grupos: Sequence[str]) -> pd.DataFrame:
     faltam = [g for g in grupos if g not in df.columns]
     return df.assign(**{g: np.nan for g in faltam}) if faltam else df
@@ -87,15 +105,18 @@ def agregar(
     grupos: Sequence[str] = GRUPOS_PADRAO,
     metricas: Sequence[str] = METRICAS_PADRAO,
 ) -> pd.DataFrame:
-    """Formato longo: ``grupos + metrica, n, media, desvio, ic95_inf, ic95_sup``."""
+    """Formato longo: ``grupos + metrica, n, n_excluido_erro, media, desvio, ic95_inf,
+    ic95_sup`` (``n`` = valores finitos entre os ensaios sem erro de execução)."""
     df = _com_grupos(df, grupos)
     linhas = []
     for chave, sub in df.groupby(list(grupos), dropna=False, sort=True):
         chave = chave if isinstance(chave, tuple) else (chave,)
+        sub, n_err = _separar_erros(sub)
         for m in metricas:
             v = _valores(sub, m)
             reg: dict[str, Any] = dict(zip(grupos, chave, strict=True))
             reg["metrica"] = m
+            reg["n_excluido_erro"] = n_err
             if v.size == 0:
                 reg.update(n=0, media=np.nan, desvio=np.nan, ic95_inf=np.nan, ic95_sup=np.nan)
             else:
@@ -113,15 +134,18 @@ def agregar(
 def taxa_recuperacao(
     df: pd.DataFrame, grupos: Sequence[str] = GRUPOS_PADRAO, coluna_classe: str = "classe"
 ) -> pd.DataFrame:
-    """``grupos + n, n_recuperados, taxa, ic95_inf, ic95_sup`` (IC de Wilson)."""
+    """``grupos + n, n_excluido_erro, n_recuperados, taxa, ic95_inf, ic95_sup`` (IC de
+    Wilson; ``n`` = ensaios sem erro de execução)."""
     df = _com_grupos(df, grupos)
     linhas = []
     for chave, sub in df.groupby(list(grupos), dropna=False, sort=True):
         chave = chave if isinstance(chave, tuple) else (chave,)
+        sub, n_err = _separar_erros(sub)
         n = len(sub)
         k = int(recuperou(sub[coluna_classe]).sum()) if coluna_classe in sub else 0
         lo, hi = intervalo_wilson(k, n)
-        linhas.append({**dict(zip(grupos, chave, strict=True)), "n": n, "n_recuperados": k,
+        linhas.append({**dict(zip(grupos, chave, strict=True)), "n": n,
+                       "n_excluido_erro": n_err, "n_recuperados": k,
                        "taxa": k / n if n else np.nan, "ic95_inf": lo, "ic95_sup": hi})
     return pd.DataFrame(linhas)
 
@@ -145,7 +169,10 @@ def comparacao_pareada(
     semente). Diferença = a - b (positiva = b melhor em métricas de erro). Ensaios sem par
     são ignorados; chave repetida dentro de um lado levanta ``ValueError``.
 
-    Inclui ``mcnemar_recuperacao`` (a, b) quando a coluna ``classe`` existe.
+    Conjunto pareado único: saem os pares com erro de execução em algum lado
+    (``n_excluido_erro``) e os pares sem ``metrica`` finita nos dois lados
+    (``n_excluido_metrica``); Wilcoxon e ``mcnemar_recuperacao`` (quando a coluna
+    ``classe`` existe) usam exatamente os ``n_pares`` restantes.
     """
     chave = [c for c in chave if c in df.columns]
     a, b = _filtrar(df, filtro_a), _filtrar(df, filtro_b)
@@ -153,20 +180,26 @@ def comparacao_pareada(
         if lado.duplicated(chave).any():
             raise ValueError(f"pareamento ambíguo: chave {chave} repetida no lado {nome}")
     cols = [*chave, metrica] + (["classe"] if "classe" in df.columns else [])
-    par = a[cols].merge(b[cols], on=chave, suffixes=("_a", "_b"))
+    a = a[cols].assign(_erro=erro_execucao(a))
+    b = b[cols].assign(_erro=erro_execucao(b))
+    par = a.merge(b, on=chave, suffixes=("_a", "_b"))
+    com_erro = par["_erro_a"] | par["_erro_b"]
     va = pd.to_numeric(par[f"{metrica}_a"], errors="coerce")
     vb = pd.to_numeric(par[f"{metrica}_b"], errors="coerce")
-    ok = np.isfinite(va) & np.isfinite(vb)
+    finito = np.isfinite(va) & np.isfinite(vb)
+    ok = ~com_erro & finito
     res = paired_comparison(va[ok].to_numpy(), vb[ok].to_numpy(), alternative=alternativa)
     saida: dict[str, Any] = {
         "metrica": metrica, "filtro_a": dict(filtro_a), "filtro_b": dict(filtro_b),
-        "n_pares": res.n, "n_nao_nulos": res.n_nonzero, "diferenca_media": res.mean_diff,
+        "n_pares": res.n, "n_excluido_erro": int(com_erro.sum()),
+        "n_excluido_metrica": int((~com_erro & ~finito).sum()),
+        "n_nao_nulos": res.n_nonzero, "diferenca_media": res.mean_diff,
         "estatistica": res.statistic, "p_valor": res.p_value, "cohens_dz": res.cohens_dz,
         "rank_biserial": res.rank_biserial, "metodo": res.method, "nota": res.note,
     }
     if "classe" in df.columns:
         saida["mcnemar_recuperacao"] = mcnemar_exato(
-            recuperou(par["classe_a"]).to_numpy(), recuperou(par["classe_b"]).to_numpy())
+            recuperou(par.loc[ok, "classe_a"]).to_numpy(), recuperou(par.loc[ok, "classe_b"]).to_numpy())
     return saida
 
 
@@ -182,18 +215,20 @@ def tabela_esforco_equivalente(
     linhas = []
     g = [*grupos, "n_candidatos_avaliados"]
     for chave, sub in df.groupby(g, dropna=False, sort=True):
+        sub, n_err = _separar_erros(sub)
         n = len(sub)
         k = int(recuperou(sub["classe"]).sum()) if "classe" in sub else 0
         lo, hi = intervalo_wilson(k, n)
         rm = _valores(sub, "rmse_log10")
         linhas.append({
-            **dict(zip(g, chave, strict=True)), "n_ensaios": n,
+            **dict(zip(g, chave, strict=True)), "n_ensaios": n, "n_excluido_erro": n_err,
             "rmse_log10_media": float(rm.mean()) if rm.size else np.nan,
             "rmse_log10_validacao_media": (lambda v: float(v.mean()) if v.size else np.nan)(
                 _valores(sub, "rmse_log10_validacao")),
             "taxa_validos_media": (lambda v: float(v.mean()) if v.size else np.nan)(
                 _valores(sub, "taxa_validos")),
-            "taxa_recuperacao": k / n, "recuperacao_ic95_inf": lo, "recuperacao_ic95_sup": hi,
+            "taxa_recuperacao": k / n if n else np.nan, "recuperacao_ic95_inf": lo,
+            "recuperacao_ic95_sup": hi,
         })
     return pd.DataFrame(linhas)
 
@@ -201,7 +236,8 @@ def tabela_esforco_equivalente(
 def tabela_custo_qualidade(
     df: pd.DataFrame, grupos: Sequence[str] = GRUPOS_PADRAO
 ) -> pd.DataFrame:
-    """Tempo, tokens e custo estimado contra a qualidade (RMSE de teste e recuperação)."""
+    """Tempo, tokens e custo estimado contra a qualidade (RMSE de teste e recuperação), só
+    com ensaios sem erro de execução (``n_excluido_erro`` reportado)."""
     df = _com_grupos(df, grupos)
     linhas = []
 
@@ -211,6 +247,7 @@ def tabela_custo_qualidade(
 
     for chave, sub in df.groupby(list(grupos), dropna=False, sort=True):
         chave = chave if isinstance(chave, tuple) else (chave,)
+        sub, n_err = _separar_erros(sub)
         tokens = np.nan
         if {"tokens_entrada", "tokens_saida"} <= set(sub.columns):
             tok = (pd.to_numeric(sub["tokens_entrada"], errors="coerce")
@@ -221,7 +258,7 @@ def tabela_custo_qualidade(
         n = len(sub)
         k = int(recuperou(sub["classe"]).sum()) if "classe" in sub else 0
         linhas.append({
-            **dict(zip(grupos, chave, strict=True)), "n_ensaios": n,
+            **dict(zip(grupos, chave, strict=True)), "n_ensaios": n, "n_excluido_erro": n_err,
             "tempo_s_media": media(sub, "tempo_s"),
             "tempo_inferencia_s_media": media(sub, "tempo_inferencia_s"),
             "tokens_media": tokens, "custo_api_estimado_total": float(custo),
@@ -229,3 +266,59 @@ def tabela_custo_qualidade(
             "taxa_recuperacao": k / n if n else np.nan,
         })
     return pd.DataFrame(linhas)
+
+
+#: Razão tempo de LLM / tempo de RS informada como referência do artigo (Taskin et al. 2026).
+RAZAO_TEMPO_LLM_RS_ARTIGO = 0.4
+
+
+def _tabela_razao_tempo(
+    df: pd.DataFrame, modo: str, col_llm: str, grupos: Sequence[str], nomes: tuple[str, str, str]
+) -> pd.DataFrame:
+    """Razão ``col_llm / (tempo_s - col_llm)`` por grupo, só no ``modo`` e só em ensaios com
+    LLM (``col_llm > 0``) sem erro de execução (``n_excluido_erro`` reportado)."""
+    if not {"tempo_s", col_llm} <= set(df.columns):
+        return pd.DataFrame()
+    if "modo" in df.columns:
+        df = df[df["modo"] == modo]
+    t = pd.to_numeric(df["tempo_s"], errors="coerce")
+    tl = pd.to_numeric(df[col_llm], errors="coerce")
+    sub = _com_grupos(df.assign(_razao=tl / (t - tl), _erro=erro_execucao(df))[
+        (tl > 0) & (t - tl > 0)], grupos)
+    linhas = []
+    for chave, g in sub.groupby(list(grupos), dropna=False, sort=True):
+        chave = chave if isinstance(chave, tuple) else (chave,)
+        n_err = int(g["_erro"].sum())
+        g = g[~g["_erro"]]
+        if g.empty:
+            continue
+        tl_g = pd.to_numeric(g[col_llm])
+        linhas.append({
+            **dict(zip(grupos, chave, strict=True)), "n_ensaios": len(g), "n_excluido_erro": n_err,
+            nomes[0]: float(tl_g.mean()),
+            nomes[1]: float((pd.to_numeric(g["tempo_s"]) - tl_g).mean()),
+            nomes[2]: float(g["_razao"].to_numpy(float).mean()),
+        })
+    return pd.DataFrame(linhas)
+
+
+def tabela_razao_tempo_llm(
+    df: pd.DataFrame, grupos: Sequence[str] = ("nivel", "modo", "condicao", "modelo", "algoritmo")
+) -> pd.DataFrame:
+    """M1: razão tempo de LLM / tempo de RS (``tempo_llm_s / (tempo_s - tempo_llm_s)``) por
+    grupo, só para ensaios com LLM, ao lado da referência do artigo (0,4). O M2 não entra
+    (não há RS): ver :func:`tabela_tempo_inferencia_m2`."""
+    t = _tabela_razao_tempo(df, "M1", "tempo_llm_s", grupos,
+                            ("tempo_llm_s_media", "tempo_rs_s_media", "razao_tempo_llm_rs_media"))
+    return t.assign(razao_artigo=RAZAO_TEMPO_LLM_RS_ARTIGO) if len(t) else t
+
+
+def tabela_tempo_inferencia_m2(
+    df: pd.DataFrame, grupos: Sequence[str] = ("nivel", "modo", "condicao", "modelo")
+) -> pd.DataFrame:
+    """M2: razão tempo de inferência / tempo de ajuste e avaliação
+    (``tempo_inferencia_s / (tempo_s - tempo_inferencia_s)``); não comparável ao 0,4 do
+    artigo, que se refere ao LLM dentro da RS."""
+    return _tabela_razao_tempo(
+        df, "M2", "tempo_inferencia_s", grupos,
+        ("tempo_inferencia_s_media", "tempo_ajuste_s_media", "razao_inferencia_ajuste_media"))

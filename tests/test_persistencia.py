@@ -133,6 +133,50 @@ def test_checkpoint_pula_ensaios_concluidos(tmp_path):
     assert "ensaio_pulado" in log
 
 
+def test_retomada_repete_erro_de_execucao_por_padrao(tmp_path):
+    chamadas = []
+    respostas = iter([_linha(status="erro_execucao", erro="TimeoutError"),
+                      _linha(status="ok", classe="não converge"),
+                      _linha(status="ok")])
+
+    def f():
+        chamadas.append(1)
+        return next(respostas)
+
+    campos = dict(nivel="N1", modo="M2", condicao="G1", algoritmo="llm_gerador",
+                  modelo="fake/x", ruido=0.0, semente=0)
+    reg = RegistroExperimento(tmp_path, {})
+    assert reg.executar(campos, f)["status"] == "erro_execucao"
+    assert not reg.concluido(campos)  # erro de execução não conclui o ensaio
+    reaberto = RegistroExperimento.abrir(reg.diretorio)
+    assert reaberto.executar(campos, f)["classe"] == "não converge"  # repetido
+    assert reaberto.concluido(campos)
+    reaberto.executar(campos, f)  # "não converge" é resultado: não é repetido
+    assert len(chamadas) == 2
+    assert len(pd.read_csv(reg.diretorio / "metrics.csv")) == 1
+
+
+def test_retomada_pode_manter_erros(tmp_path):
+    chamadas = []
+
+    def f():
+        chamadas.append(1)
+        return _linha(status="erro_execucao")
+
+    campos = dict(nivel="N1", modo="M2", condicao="G1", algoritmo="llm_gerador",
+                  modelo="fake/x", ruido=0.0, semente=0)
+    reg = RegistroExperimento(tmp_path, {})
+    reg.executar(campos, f)
+    reg.executar(campos, f, repetir_erros=False)
+    assert len(chamadas) == 1
+
+
+def test_status_legado_erro_vira_erro_de_execucao(tmp_path):
+    pd.DataFrame({"nivel": ["N1", "N1"], "algoritmo": ["deap", "deap"], "condicao": ["A", "A"],
+                  "semente": [0, 1], "status": ["ok", "erro"]}).to_csv(tmp_path / "x.csv", index=False)
+    assert list(carregar_resultados(tmp_path / "x.csv")["status"]) == ["ok", "erro_execucao"]
+
+
 def test_chave_distingue_modelo_e_condicao():
     reg_chave = persistencia.chave_ensaio
     a = reg_chave(_linha())
@@ -174,6 +218,49 @@ def test_nunca_grava_segredos(tmp_path, monkeypatch):
     assert cfg["config"]["provedor"]["variavel_credencial"] == "OPENAI_API_KEY"  # nome, não valor
     meta = json.loads((reg.diretorio / "generation_metadata.json").read_text("utf-8"))
     assert re.fullmatch(r"[0-9a-f]{64}", meta.get("hash_templates", {}).get("conjunto", "0" * 64))
+
+
+def test_gravar_csv_e_json_saneiam_saidas_do_notebook(tmp_path, monkeypatch):
+    """auditoria_avaliador.csv (resposta_crua), benchmark_*.csv e uso_llm.json passam por
+    sanear, inclusive coluna com nome sensível."""
+    chave_env = "chave-de-ambiente-0123456789"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", chave_env)
+    aud = pd.DataFrame({"rotulo": ["referencia"], "c": [0.1],
+                        "resposta_crua": [f"eco {chave_env} e sk-vazada0123456789"],
+                        "api_key": ["qualquer"]})
+    persistencia.gravar_csv(tmp_path / "auditoria_avaliador.csv", aud)
+    persistencia.gravar_json(tmp_path / "uso_llm.json",
+                             {"openai/m": {"chamadas": 3, "erro": f"Bearer {chave_env}"}})
+    for nome in ("auditoria_avaliador.csv", "uso_llm.json"):
+        texto = (tmp_path / nome).read_text("utf-8")
+        assert chave_env not in texto and "sk-vazada" not in texto and "qualquer" not in texto
+    lido = pd.read_csv(tmp_path / "auditoria_avaliador.csv")
+    assert lido.loc[0, "c"] == 0.1 and lido.loc[0, "rotulo"] == "referencia"
+    assert json.loads((tmp_path / "uso_llm.json").read_text("utf-8"))["openai/m"]["chamadas"] == 3
+
+
+def test_credenciais_do_colab_saneadas_sem_consultar_outros_segredos(tmp_path, monkeypatch):
+    from otft_sr import provedores_llm as pl
+
+    consultados = []
+    segredo = "valor-colab-sem-formato-9876543210"
+
+    def ler(nome):
+        consultados.append(nome)
+        return segredo if nome == "MINHA_CHAVE_LLM" else None
+
+    monkeypatch.setattr(pl, "_ler_segredo_colab", ler)
+    monkeypatch.setattr(pl, "em_colab", lambda: True)
+    monkeypatch.setattr(persistencia, "_SEGREDOS_COLAB", {})
+    monkeypatch.setattr(persistencia, "_NOMES_CREDENCIAIS", set())
+    for v in pl.CREDENCIAL_PADRAO.values():
+        monkeypatch.delenv(v, raising=False)
+    persistencia.registrar_credenciais(["MINHA_CHAVE_LLM"])
+    persistencia.gravar_csv(tmp_path / "x.csv", pd.DataFrame({"resposta_crua": [f"a {segredo} b"]}))
+    assert segredo not in (tmp_path / "x.csv").read_text("utf-8")
+    assert set(consultados) == {"MINHA_CHAVE_LLM"}  # só nomes de credenciais configuradas
+    persistencia.gravar_csv(tmp_path / "y.csv", pd.DataFrame({"a": [1]}))
+    assert consultados == ["MINHA_CHAVE_LLM"]  # lido uma vez por sessão
 
 
 def test_sanear_preserva_hashes_e_contadores():

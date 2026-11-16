@@ -378,6 +378,39 @@ def test_provedor_por_configuracao_e_sem_candidato_valido(ds_n3):
     cfg = ConfiguracaoLLM("fake", "roteiro-m2", resposta_fake="sem json")
     linha, cands = executar_geracao(N3, "G0", cfg, 0, 2, 0, max_retentativas=0, datasets=ds_n3)
     assert linha["modelo"] == "fake/roteiro-m2"
-    assert linha["status"] == "erro" and linha["n_candidatos_validos"] == 0
-    assert linha["classe"] == "erro de execução"
+    # o LLM respondeu, mas nada foi interpretado: resultado científico (não converge), não erro
+    assert linha["status"] == "ok" and linha["n_candidatos_validos"] == 0
+    assert linha["classe"] == "não converge"
     assert all(c["status"] == "invalido" for c in cands)
+
+
+class _BackendQueFalha:
+    """Provedor que falha (timeout/OOM/API) nas chamadas de índice em ``falhas``."""
+
+    def __init__(self, falhas, resposta):
+        self.falhas, self.resposta, self.n = set(falhas), resposta, 0
+
+    def generate(self, prompts):
+        i, self.n = self.n, self.n + 1
+        if i in self.falhas:
+            raise TimeoutError("tempo esgotado")
+        return [self.resposta] * len(prompts)
+
+    def model_metadata(self):
+        return {"backend": "teste"}
+
+
+def test_falha_do_provedor_em_todas_as_chamadas_e_erro_de_execucao(ds_n3):
+    fb = _BackendQueFalha(range(100), CORRETA_N3)
+    linha, _ = executar_geracao(N3, "G0", fb, 0, 2, 0, max_retentativas=1, datasets=ds_n3)
+    assert linha["status"] == "erro_execucao" and linha["classe"] == "erro de execução"
+    assert "erro_provedor" in linha["erro"]
+
+
+def test_falha_do_provedor_em_um_candidato_e_erro_de_execucao(ds_n3):
+    # candidato 0 esgota as tentativas por falha do provedor; o 1 é válido: o esforço
+    # planejado (n_candidatos) não foi cumprido, o ensaio é repetido na retomada
+    fb = _BackendQueFalha({0, 1}, CORRETA_N3)
+    linha, cands = executar_geracao(N3, "G0", fb, 0, 2, 0, max_retentativas=1, datasets=ds_n3)
+    assert cands[1]["status"] == "valido"
+    assert linha["status"] == "erro_execucao"

@@ -120,3 +120,48 @@ def test_tabela_custo_qualidade():
     assert g1["tempo_inferencia_s_media"] == pytest.approx(9.5)
     assert math.isnan(g1["tokens_media"]) and math.isnan(g1["custo_api_estimado_total"])
     assert g1["taxa_recuperacao"] == 0.75
+
+
+# ------------------------------------------------- exclusão de erros de execução
+
+
+def _com_erros():
+    """G0/G1 com 4 sementes; G1 semente 3 e G0 semente 0 com erro de execução; G0 semente 1
+    ok, mas sem métrica (não converge sem candidato)."""
+    df = _df()
+    df = df[df["modo"] == "M2"].copy()
+    i_g1 = df.index[(df["condicao"] == "G1") & (df["semente"] == 3)]
+    i_g0 = df.index[(df["condicao"] == "G0") & (df["semente"] == 0)]
+    df.loc[i_g1, ["status", "classe", "rmse_log10"]] = ["erro_execucao", "erro de execução", np.nan]
+    df.loc[i_g0, ["status", "classe", "rmse_log10"]] = ["erro_execucao", "erro de execução", np.nan]
+    i_nc = df.index[(df["condicao"] == "G0") & (df["semente"] == 1)]
+    df.loc[i_nc, ["classe", "rmse_log10"]] = ["não converge", np.nan]
+    return df
+
+
+def test_taxa_exclui_erro_de_execucao_do_denominador():
+    t = taxa_recuperacao(_com_erros())
+    g1 = t[t["condicao"] == "G1"].iloc[0]
+    assert (g1["n"], g1["n_excluido_erro"], g1["n_recuperados"]) == (3, 1, 2)
+    assert g1["taxa"] == pytest.approx(2 / 3)
+    assert (g1["ic95_inf"], g1["ic95_sup"]) == pytest.approx(intervalo_wilson(2, 3))
+
+
+def test_pareamento_unico_para_wilcoxon_e_mcnemar():
+    r = comparacao_pareada(_com_erros(), "rmse_log10", {"condicao": "G0"}, {"condicao": "G1"})
+    # sementes 0 (erro em G0) e 3 (erro em G1) saem; semente 1 sai por métrica ausente
+    assert r["n_excluido_erro"] == 2 and r["n_excluido_metrica"] == 1
+    assert r["n_pares"] == 1
+    mc = r["mcnemar_recuperacao"]
+    assert mc["n11"] + mc["n10"] + mc["n01"] + mc["n00"] == r["n_pares"]
+
+
+def test_agregacao_e_tabelas_reportam_excluidos():
+    df = _com_erros()
+    ag = agregar(df, metricas=("rmse_log10", "tempo_s"))
+    g1 = ag[(ag["condicao"] == "G1") & (ag["metrica"] == "tempo_s")].iloc[0]
+    assert g1["n"] == 3 and g1["n_excluido_erro"] == 1  # tempo do ensaio com erro fica fora
+    for t in (tabela_esforco_equivalente(df), tabela_custo_qualidade(df)):
+        g1 = t[t["condicao"] == "G1"].iloc[0]
+        assert g1["n_ensaios"] == 3 and g1["n_excluido_erro"] == 1
+        assert g1["taxa_recuperacao"] == pytest.approx(2 / 3)

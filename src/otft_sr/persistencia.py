@@ -15,7 +15,10 @@ Estrutura::
 - Id único: ``<prefixo>_<AAAAMMDD-HHMMSS>_<6 hex aleatórios>``.
 - Retomada: a chave do ensaio é nível x modo x condição x algoritmo x modelo x ruído x
   semente (algoritmo e ruído entram para que ensaios M1 de algoritmos de RS ou ruídos
-  diferentes não colidam); ensaios já registrados são pulados por :meth:`executar`.
+  diferentes não colidam). ``modelo`` é a identidade completa
+  (``ConfiguracaoLLM.rotulo``: ``provedor/modelo@revisao[quantizacao]``), de modo que outra
+  revisão ou quantização nunca reaproveita ensaios gravados. Ensaios ``ok`` já registrados
+  são pulados por :meth:`executar`.
 - Segredos: tudo o que é gravado passa por :func:`sanear` (chaves sensíveis pelo nome,
   padrões de chave de API e valores das variáveis de credencial do ambiente).
 - :func:`carregar_resultados` lê o próprio formato e os CSV/JSON antigos do notebook 01,
@@ -34,7 +37,7 @@ import os
 import re
 import secrets
 import subprocess
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -42,10 +45,11 @@ import numpy as np
 import pandas as pd
 
 from otft_sr.estatistica import agregar
-from otft_sr.experimento import COLUNAS_M1
+from otft_sr.experimento import COLUNAS_M1, STATUS_ERRO_EXECUCAO, STATUS_OK
 from otft_sr.gerador import COLUNAS_M2, carregar_templates
 from otft_sr.gerador import hash_templates as _hash_templates
 from otft_sr.ovsed import RAIZ_PROJETO
+from otft_sr import provedores_llm as _pl
 from otft_sr.provedores_llm import CREDENCIAL_PADRAO, relatorio_ambiente
 
 ARQUIVOS: tuple[str, ...] = (
@@ -74,9 +78,33 @@ _PADROES_SEGREDO = re.compile(
 MASCARA = "***"
 
 
+#: Nomes de credenciais dos modelos configurados (``registrar_credenciais``) cujos valores
+#: também são lidos do Colab Secrets para o saneamento.
+_NOMES_CREDENCIAIS: set[str] = set()
+#: Valores já lidos do Colab Secrets nesta sessão (nome -> valor ou ``None``).
+_SEGREDOS_COLAB: dict[str, str | None] = {}
+
+
+def registrar_credenciais(nomes: Iterable[str | None]) -> None:
+    """Acrescenta NOMES de credenciais (ex.: ``ConfiguracaoLLM.credencial`` dos modelos
+    configurados) cujos valores, se existirem no ambiente ou no Colab Secrets, são
+    mascarados em toda saída gravada. Nenhum outro segredo do Colab é consultado."""
+    _NOMES_CREDENCIAIS.update(n for n in nomes if n)
+
+
 def _valores_credenciais() -> list[str]:
-    nomes = set(CREDENCIAL_PADRAO.values())
-    return [v for n in nomes if (v := os.environ.get(n)) and len(v) >= 8]
+    """Valores das credenciais conhecidas: variáveis de ambiente de :data:`CREDENCIAL_PADRAO`
+    e das registradas; no Colab, também ``userdata.get`` só dos nomes registrados (lido uma
+    vez por sessão; ``userdata`` nunca é enumerado)."""
+    nomes = set(CREDENCIAL_PADRAO.values()) | _NOMES_CREDENCIAIS
+    valores = {v for n in nomes if (v := os.environ.get(n))}
+    if _NOMES_CREDENCIAIS and _pl.em_colab():
+        for n in sorted(_NOMES_CREDENCIAIS):
+            if n not in _SEGREDOS_COLAB:
+                _SEGREDOS_COLAB[n] = _pl._ler_segredo_colab(n)
+            if _SEGREDOS_COLAB[n]:
+                valores.add(_SEGREDOS_COLAB[n])
+    return sorted((v for v in valores if len(v) >= 8), key=len, reverse=True)
 
 
 def sanear(obj: Any, _creds: list[str] | None = None) -> Any:
@@ -172,10 +200,30 @@ def _escrever_json(caminho: Path, obj: Any) -> None:
 
 def _escrever_csv(caminho: Path, df: pd.DataFrame) -> None:
     creds = _valores_credenciais()
-    df = df.apply(lambda col: col.map(lambda v: sanear(v, creds) if isinstance(v, str) else v))
+    df = df.copy()
+    for col in df.columns:
+        if isinstance(col, str) and _CHAVE_SENSIVEL.search(col):
+            df[col] = df[col].map(lambda v: MASCARA if isinstance(v, str) and v else v)
+        else:
+            df[col] = df[col].map(lambda v: sanear(v, creds) if isinstance(v, str) else v)
     tmp = caminho.with_suffix(caminho.suffix + ".tmp")
     df.to_csv(tmp, index=False)
     tmp.replace(caminho)
+
+
+def gravar_csv(caminho: Path | str, df: pd.DataFrame) -> Path:
+    """Grava ``df`` saneado (:func:`sanear` em todo valor de texto; colunas de nome sensível
+    mascaradas). Use para TODA tabela gravada em ``results/<id>/`` (auditoria, benchmark)."""
+    caminho = Path(caminho)
+    _escrever_csv(caminho, df)
+    return caminho
+
+
+def gravar_json(caminho: Path | str, obj: Any) -> Path:
+    """Grava ``obj`` saneado em JSON (ex.: ``uso_llm.json``)."""
+    caminho = Path(caminho)
+    _escrever_json(caminho, obj)
+    return caminho
 
 
 def _valor_csv(v: Any) -> Any:
@@ -196,8 +244,15 @@ def _norm_chave(v: Any) -> str:
 
 
 def chave_ensaio(linha: Mapping[str, Any]) -> str:
-    """Chave do ensaio (``campo=valor`` de :data:`CAMPOS_CHAVE`, separados por ``|``)."""
-    return "|".join(f"{k}={_norm_chave(linha.get(k))}" for k in CAMPOS_CHAVE)
+    """Chave do ensaio (``campo=valor`` de :data:`CAMPOS_CHAVE`, separados por ``|``).
+
+    ``formulacao_perda`` só entra na chave quando é ``log10`` (H-OTFT-19): ensaios lineares
+    mantêm a chave anterior à opção e continuam retomáveis.
+    """
+    chave = "|".join(f"{k}={_norm_chave(linha.get(k))}" for k in CAMPOS_CHAVE)
+    if linha.get("formulacao_perda") == "log10":
+        chave += "|formulacao_perda=log10"
+    return chave
 
 
 def _ordenar_colunas(df: pd.DataFrame) -> pd.DataFrame:
@@ -245,7 +300,7 @@ class RegistroExperimento:
         c = self.diretorio / "candidates.csv"
         if c.is_file():
             self._candidatos = pd.read_csv(c).to_dict("records")
-        self._chaves = {chave_ensaio(x) for x in self._linhas}
+        self._status = {chave_ensaio(x): x.get("status") for x in self._linhas}
         if existente:
             self.log("experimento_retomado", n_ensaios=len(self._linhas))
 
@@ -270,8 +325,9 @@ class RegistroExperimento:
         return chave_ensaio(linha)
 
     def concluido(self, campos: Mapping[str, Any]) -> bool:
-        """``True`` se o ensaio de ``campos`` já foi registrado."""
-        return chave_ensaio(campos) in self._chaves
+        """``True`` se o ensaio de ``campos`` já foi registrado com ``status = "ok"``
+        (ensaios com erro de execução continuam pendentes)."""
+        return self._status.get(chave_ensaio(campos)) == STATUS_OK
 
     # --------------------------------------------------------------- gravação
 
@@ -287,7 +343,7 @@ class RegistroExperimento:
         ch = chave_ensaio(linha)
         linha["chave_ensaio"] = ch
         self._linhas = [x for x in self._linhas if chave_ensaio(x) != ch] + [linha]
-        self._chaves.add(ch)
+        self._status[ch] = linha.get("status")
         _escrever_csv(self.diretorio / "metrics.csv",
                       _ordenar_colunas(pd.DataFrame([{k: _valor_csv(v) for k, v in x.items()}
                                                      for x in self._linhas])))
@@ -332,17 +388,18 @@ class RegistroExperimento:
         self,
         campos: Mapping[str, Any],
         funcao: Callable[[], Any],
-        repetir_erros: bool = False,
+        repetir_erros: bool = True,
     ) -> dict[str, Any]:
         """Executa ``funcao`` (que devolve ``linha``, ``(linha, candidatos)`` ou
         ``(linha, candidatos, metadados)``) só se o ensaio de ``campos`` não foi registrado.
 
         ``campos`` completa a linha (ex.: ``modo``/``modelo`` no M1) e precisa gerar a mesma
-        chave. ``repetir_erros=True`` reexecuta ensaios registrados com ``status != 'ok'``.
+        chave. Ensaios registrados com ``status = "erro_execucao"`` (falha de infraestrutura)
+        são reexecutados por padrão; ``repetir_erros=False`` os mantém.
         """
         ch = chave_ensaio(campos)
         anterior = next((x for x in self._linhas if chave_ensaio(x) == ch), None)
-        if anterior is not None and not (repetir_erros and anterior.get("status") != "ok"):
+        if anterior is not None and not (repetir_erros and anterior.get("status") != STATUS_OK):
             self.log("ensaio_pulado", chave=ch)
             return anterior
         res = funcao()
@@ -401,6 +458,8 @@ def normalizar_resultados(df: pd.DataFrame, metadados: Mapping[str, Any] | None 
     for col, valores in mapa["valores"].items():
         if col in df.columns:
             df[col] = df[col].replace(valores)
+    if "status" in df.columns:  # status antigo "erro" = exceção na execução
+        df["status"] = df["status"].replace({"erro": STATUS_ERRO_EXECUCAO})
     if "modo" not in df.columns and (legado or "algoritmo" in df.columns):
         df["modo"] = "M1"  # o notebook 01 só executa o modo M1 (executar_condicao)
     return _ordenar_colunas(df)
