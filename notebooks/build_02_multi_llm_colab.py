@@ -40,7 +40,10 @@ plausibilidade dentro da regressão simbólica (RS), seja como gerador de equaç
 
 **O que cada comparação permite concluir.** A×B e A×C (mesma configuração de busca, pareadas
 por semente): efeito do avaliador sobre a recuperação. B×C: efeito do conteúdo físico do
-prompt. G0×G1: efeito do contexto físico na geração (mesmo número de candidatos). G1×G2:
+prompt. G0×G1: efeito do contexto físico na geração (mesmo número de candidatos). Em B×C e
+G0×G1 o contexto inclui princípios qualitativos dos regimes (mobilidade crescente com
+V_GS − V_Th, subida exponencial até o piso de fuga), nunca a equação nem as constantes
+(H-OTFT-21): mede-se o contexto de domínio, não a ausência de informação estrutural. G1×G2:
 efeito do refinamento, com esforço maior (exploratória). M1×M2: só sob custo efetivo
 (exploratória). B/C só são interpretáveis se a auditoria da seção 9 mostrar que o modelo
 discrimina a referência de formas erradas.
@@ -49,7 +52,7 @@ discrimina a referência de formas erradas.
 longa é retomável: após queda da sessão, execute de novo as seções 2–4 e continue; ensaios já
 gravados em `results/<id>/` com `status = "ok"` são pulados e ensaios com `erro_execucao`
 (falha de infraestrutura: exceção, memória, tempo esgotado, API) são repetidos. Premissas: `references/premissas_cientificas.md`
-(H-OTFT-01…20).
+(H-OTFT-01…21).
 """)
 
 # ============================================================================ 2

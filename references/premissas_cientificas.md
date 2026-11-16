@@ -151,3 +151,17 @@ gerados por `src/otft_sr/niveis.py` (constantes arredondadas a 4 algarismos sign
   nós); teste só do selecionado, com as métricas do M1 (`formulacao_perda = "ajuste_log10"`
   nas linhas do M2). G0 e G1 avaliam `n_candidatos`; G2 avalia `n_candidatos × (1 + k)`, por
   isso G1 × G2 é comparação exploratória (esforço diferente) e G0 × G1 é equivalente.
+- **H-OTFT-21 — O contexto físico declara princípios qualitativos dos regimes.** O contexto
+  de G1/G2 (`prompts/gerador/contexto_fisico.txt`) e o prompt de dispositivo da condição C
+  (`prompts/dispositivo/base/system.txt`) trazem conhecimento geral de OTFT previsto na
+  proposta (§5.2) que é também informação estrutural sobre os níveis: a mobilidade efetiva
+  cresce com o excesso de tensão de porta V_GS − V_Th (aponta para o expoente > 2 do N3), a
+  corrente sublimiar sobe exponencialmente com V_GS até um piso de fuga constante (aponta
+  para a forma do N4), I_D se anula em V_DS = 0 no triodo e independe de V_DS na saturação
+  (N1/N2). Esses trechos são mantidos de propósito. Por isso as diferenças G0 × G1 (M2) e
+  B × C (M1) medem o efeito do **contexto físico de domínio incluindo princípios qualitativos
+  dos regimes**, não o de ausência total de informação estrutural. A equação, os expoentes
+  e as constantes dos níveis nunca são revelados: `tests/test_contexto_fisico_prompts.py`
+  lista as frases de princípio permitidas e reprova forma matemática explícita (`**`, `^`,
+  `exp(`, `log(`, `(V_GS − V_Th)`) no texto de contexto e as constantes dos níveis em todos os
+  prompts G0/G1/G2 e B/C.
