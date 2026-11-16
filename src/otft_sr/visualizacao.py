@@ -86,8 +86,13 @@ def figura_contexto_fisico(ids: Sequence[str] = ("N1", "N2", "N3", "N4")):
                                  line=dict(color="crimson", width=3)), row=1, col=j)
         fig.update_xaxes(title_text=("V_DS (V)" if saida else "V_GS (V)") + f", {fixo}", row=1, col=j)
         fig.update_yaxes(type="log", title_text=f"I_D ({n.unidades['I_D']})", row=1, col=j)
-    fig.update_layout(title="Níveis × OVSED × Org1 medida (só a região de cada nível)",
-                      height=420, width=380 * len(ids))
+    # Largura automática (ocupa a área de saída do notebook); legenda horizontal abaixo dos painéis
+    # para não roubar largura dos eixos nem cortar o título.
+    fig.update_layout(title=dict(text="Níveis × OVSED × Org1 medida (região de cada nível)",
+                                 x=0.5, xanchor="center"),
+                      autosize=True, height=480, margin=dict(l=70, r=30, t=90, b=110),
+                      legend=dict(orientation="h", x=0.5, xanchor="center", y=-0.22,
+                                  yanchor="top"))
     return fig
 
 
