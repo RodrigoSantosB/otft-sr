@@ -86,13 +86,17 @@ M2 (gerador, G0/G1/G2), com auditoria do avaliador, benchmark pareado por sement
 Plotly. A configuração única (`otft_sr.campanha.ConfiguracaoExperimento`) fica na seção 4;
 `formulacao_perda = "log10"` é opcional (H-OTFT-19).
 
-1. Gere o pacote: `"$PY" scripts/empacotar_para_colab.py` -> `dist/otft-sr-<commit>.zip`
-   (sem `results/`, `.cache/`, `.git/` nem segredos; versões fixadas em `requirements-colab.txt`).
-2. Copie o zip para o Google Drive em `MyDrive/otft-sr/` (o notebook extrai o mais recente).
-3. Abra o `.ipynb` no Colab (Arquivo > Fazer upload ou a partir do Drive), escolha GPU
-   (A100 para os três modelos sem quantização; T4 usa 8 bits no Mistral) e execute em ordem.
+1. Abra direto do GitHub (sempre a versão publicada mais recente):
+   <https://colab.research.google.com/github/RodrigoSantosB/otft-sr/blob/main/notebooks/02_multi_llm_descoberta_otft_colab.ipynb>
+2. Escolha GPU (A100 para os três modelos sem quantização; T4 usa 8 bits no Mistral).
+3. A seção 2 clona/atualiza este repositório em `OTFT_SR_REF` (`"main"` = última versão; um hash
+   de commit fixa a versão) e imprime o commit usado, gravado em `environment.json`. Cada nova
+   sessão do Colab puxa as correções publicadas; numa sessão já aberta, reinicie e rode a seção 2.
 4. Resultados: `results/<id>/` no disco do Colab, copiados para `MyDrive/otft-sr/results/<id>/`
    ao fim de cada etapa longa; a reexecução retoma de onde parou.
+
+Alternativa sem GitHub: `"$PY" scripts/empacotar_para_colab.py` gera `dist/otft-sr-<commit>.zip`;
+copie para `MyDrive/otft-sr/` e use `OTFT_SR_FONTE = "zip"` na seção 2.
 
 Localmente o notebook roda com `EXECUCAO_DE_VERIFICACAO = True` (código do Colab pulado) e
 `BACKEND_VERIFICACAO = "simulado"` ou `"ollama"`; `"$PY" -m pytest -m lento` o executa.

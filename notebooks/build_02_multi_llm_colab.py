@@ -59,19 +59,23 @@ gravados em `results/<id>/` com `status = "ok"` são pulados e ensaios com `erro
 md(r"""
 ## 2. Ambiente (Colab ou local)
 
-**Finalidade:** preparar código, dados e caminhos. **Método:** no Colab, monta o Drive, clona o
-`physics-llm-sr` no commit fixado, extrai o pacote `otft-sr-<commit>.zip` de
-`MyDrive/otft-sr/` para o disco local e define `HF_HOME` no disco local; fora do Colab usa o
-checkout atual (nada é instalado). **Resultado esperado:** caminhos impressos e relatório de
-CPU/GPU/memória.
+**Finalidade:** preparar código, dados e caminhos. **Método:** no Colab, monta o Drive (cópia
+dos resultados), clona o `physics-llm-sr` no commit fixado e clona/atualiza o `otft-sr` do GitHub
+na referência `OTFT_SR_REF` (`"main"` = última versão publicada; um hash de commit fixa a versão).
+O commit efetivamente usado é impresso e gravado em `environment.json`. `OTFT_SR_FONTE = "zip"`
+mantém a alternativa do pacote no Drive. Fora do Colab usa o checkout atual. **Resultado
+esperado:** caminhos, commit do `otft-sr` e relatório de CPU/GPU/memória.
 """)
 
 code(r"""
 # ---- PARÂMETROS DE AMBIENTE (o restante da configuração fica na seção 4) ---------------
 PHYSICS_LLM_SR_URL = "https://github.com/RodrigoSantosB/physics-llm-sr.git"
 PHYSICS_LLM_SR_COMMIT = "0436128b7968b1251a445241f01add21d86da6a1"  # commit validado
-DIR_DRIVE = "/content/drive/MyDrive/otft-sr"  # pacote otft-sr-<commit>.zip e cópia dos resultados
-PACOTE_ZIP = None              # None = o otft-sr-*.zip mais recente em DIR_DRIVE
+OTFT_SR_URL = "https://github.com/RodrigoSantosB/otft-sr.git"
+OTFT_SR_REF = "main"           # "main" = última versão publicada | hash de commit = versão fixa
+OTFT_SR_FONTE = "github"       # "github" | "zip" (pacote otft-sr-<commit>.zip em DIR_DRIVE)
+DIR_DRIVE = "/content/drive/MyDrive/otft-sr"  # cópia dos resultados (e pacote zip, se usado)
+PACOTE_ZIP = None              # só com OTFT_SR_FONTE = "zip"; None = o zip mais recente
 DIR_TRABALHO = "/content/otft-sr"            # disco local do Colab (rápido)
 DIR_PHYSICS_LLM_SR = "/content/physics-llm-sr"
 HF_HOME_DIR = "/content/hf_home"             # pesos no disco local (o Drive trunca arquivos grandes)
@@ -116,7 +120,18 @@ if EM_COLAB:
         subprocess.run(["git", "-C", str(repo), "fetch", "--quiet", "origin"], check=True)
         subprocess.run(["git", "-C", str(repo), "checkout", "--quiet", PHYSICS_LLM_SR_COMMIT], check=True)
     RAIZ = Path(DIR_TRABALHO)
-    if not (RAIZ / "src" / "otft_sr").is_dir():
+    if OTFT_SR_FONTE == "github":
+        if not (RAIZ / ".git").is_dir():
+            subprocess.run(["git", "clone", "--quiet", OTFT_SR_URL, str(RAIZ)], check=True)
+        subprocess.run(["git", "-C", str(RAIZ), "fetch", "--quiet", "origin"], check=True)
+        ramo = subprocess.run(["git", "-C", str(RAIZ), "ls-remote", "--heads", "origin", OTFT_SR_REF],
+                              capture_output=True, text=True, check=True).stdout.strip()
+        alvo = f"origin/{OTFT_SR_REF}" if ramo else OTFT_SR_REF
+        subprocess.run(["git", "-C", str(RAIZ), "checkout", "--quiet", "--detach", alvo], check=True)
+        commit_otft = subprocess.run(["git", "-C", str(RAIZ), "rev-parse", "HEAD"],
+                                     capture_output=True, text=True, check=True).stdout.strip()
+        VERSAO_GIT = {"origem": OTFT_SR_URL, "referencia": OTFT_SR_REF, "commit": commit_otft}
+    elif not (RAIZ / "src" / "otft_sr").is_dir():
         zips = ([Path(PACOTE_ZIP)] if PACOTE_ZIP else
                 sorted(Path(DIR_DRIVE).glob("otft-sr-*.zip"), key=lambda p: p.stat().st_mtime))
         if not zips:
@@ -136,7 +151,8 @@ for c in CAMINHOS:
     if str(c) not in sys.path:
         sys.path.insert(0, str(c))
 arq_versao = RAIZ / "VERSAO_PACOTE.json"
-VERSAO_PACOTE = json.loads(arq_versao.read_text()) if arq_versao.is_file() else {"origem": "checkout local"}
+VERSAO_PACOTE = globals().get("VERSAO_GIT") or (
+    json.loads(arq_versao.read_text()) if arq_versao.is_file() else {"origem": "checkout local"})
 
 from otft_sr.provedores_llm import relatorio_ambiente
 
